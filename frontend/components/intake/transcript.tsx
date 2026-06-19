@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect, useRef, useState } from "react"
+import { useLayoutEffect, useRef, useState } from "react"
 import { Send } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -18,11 +18,12 @@ export function Transcript({
   onSend: (message: string) => void
   disabled?: boolean
 }) {
-  const endRef = useRef<HTMLDivElement>(null)
+  const messagesRef = useRef<HTMLDivElement>(null)
   const [message, setMessage] = useState("")
 
-  useEffect(() => {
-    endRef.current?.scrollIntoView({ behavior: "smooth", block: "end" })
+  useLayoutEffect(() => {
+    const messages = messagesRef.current
+    if (messages) messages.scrollTop = messages.scrollHeight
   }, [turns.length, thinking])
 
   const send = (event: React.FormEvent) => {
@@ -35,7 +36,7 @@ export function Transcript({
 
   return (
     <div className="flex min-h-72 flex-col">
-      <div className="flex flex-1 flex-col gap-4">
+      <div ref={messagesRef} className="flex max-h-96 flex-1 flex-col gap-4 overflow-y-auto pr-1">
         {turns.length === 0 && (
           <div className="flex min-h-48 flex-1 flex-col items-center justify-center gap-1 text-center">
             <p className="text-sm font-medium text-foreground">No conversation yet</p>
@@ -93,7 +94,6 @@ export function Transcript({
             </div>
           </div>
         )}
-        <div ref={endRef} />
       </div>
 
       <form onSubmit={send} className="mt-5 flex gap-2 border-t border-border pt-4">
