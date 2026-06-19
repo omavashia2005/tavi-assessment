@@ -1,6 +1,7 @@
 "use client"
 
 import { useState } from "react"
+import Link from "next/link"
 import { MapPin, Wrench, DollarSign, CalendarDays, MessageSquare, Check, Expand, X } from "lucide-react"
 import type { LucideIcon } from "lucide-react"
 import { cn } from "@/lib/utils"
@@ -9,6 +10,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Badge } from "@/components/ui/badge"
 import { Input } from "@/components/ui/input"
 import { Textarea } from "@/components/ui/textarea"
+import { Button } from "@/components/ui/button"
 import type { WorkOrder, WorkOrderField } from "@/lib/types"
 
 const FIELDS: {
@@ -166,6 +168,11 @@ export function WorkOrderSummary({
               </button>
             </CardHeader>
             <CardContent>{fields(true)}</CardContent>
+            <div className="flex justify-end border-t border-border px-6 pt-4">
+              <Button nativeButton={false} render={<Link href="/review" />}>
+                Review work order
+              </Button>
+            </div>
           </Card>
         </div>
       )}
