@@ -13,7 +13,12 @@ import { VoiceOrb } from "@/components/intake/voice-orb"
 import { Transcript } from "@/components/intake/transcript"
 import { WorkOrderSummary } from "@/components/intake/work-order-summary"
 import { useWorkflow } from "@/components/workflow-provider"
-import { WorkOrderSchema, type AgentStatus, type TranscriptTurn } from "@/lib/types"
+import {
+  ChatResponseSchema,
+  WorkOrderSchema,
+  type AgentStatus,
+  type TranscriptTurn,
+} from "@/lib/types"
 
 const PIPECAT_URL = process.env.NEXT_PUBLIC_PIPECAT_URL ?? "http://localhost:7860"
 
@@ -133,30 +138,38 @@ export default function IntakePage() {
   }, [resetWorkflow])
 
   const sendMessage = useCallback(async (text: string) => {
-    setTurns((prev) => [
-      ...prev,
+    const nextTurns: TranscriptTurn[] = [
+      ...turns,
       { id: Date.now(), role: "user", text },
-    ])
+    ]
+    setTurns(nextTurns)
     setStatus("thinking")
 
-    const client = await connect()
-    if (!client) {
-      setStatus("idle")
-      return
-    }
-
     try {
-      await client.sendText(text, {
-        run_immediately: true,
-        audio_response: voiceEnabledRef.current,
+      const response = await fetch(`${PIPECAT_URL}/api/chat`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          turns: nextTurns.map(({ role, text }) => ({ role, text })),
+          workOrder,
+        }),
       })
+      if (!response.ok) throw new Error(await response.text())
+
+      const result = ChatResponseSchema.parse(await response.json())
+      setTurns((previous) => [
+        ...previous,
+        { id: Date.now(), role: "agent", text: result.assistant },
+      ])
+      setWorkOrder(result.workOrder)
     } catch (error) {
-      setStatus("idle")
       toast.error("Message was not sent", {
         description: error instanceof Error ? error.message : "Try again.",
       })
+    } finally {
+      setStatus("idle")
     }
-  }, [connect])
+  }, [setWorkOrder, turns, workOrder])
 
   return (
     <div className="flex flex-col gap-8">

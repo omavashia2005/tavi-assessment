@@ -53,3 +53,8 @@ export const TranscriptTurnSchema = z.object({
 })
 
 export type TranscriptTurn = z.infer<typeof TranscriptTurnSchema>
+
+export const ChatResponseSchema = z.object({
+  assistant: z.string(),
+  workOrder: WorkOrderSchema,
+})
