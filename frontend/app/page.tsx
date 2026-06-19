@@ -53,12 +53,15 @@ export default function IntakePage() {
             { id: Date.now(), role: "user", text },
           ])
         },
-        onBotTranscript: ({ text }) => {
-          if (!text.trim()) return
+        onBotOutput: ({ aggregated_by, text }) => {
+          if (aggregated_by !== "sentence" || !text.trim()) return
           setTurns((previous) => [
             ...previous,
             { id: Date.now(), role: "agent", text },
           ])
+        },
+        onBotLlmStopped: () => {
+          if (!voiceEnabledRef.current) setStatus("idle")
         },
         onServerMessage: (data) => {
           const result = WorkOrderSchema.safeParse(data)
@@ -130,16 +133,29 @@ export default function IntakePage() {
   }, [resetWorkflow])
 
   const sendMessage = useCallback(async (text: string) => {
-    const client = await connect()
-    if (!client) return
     setTurns((prev) => [
       ...prev,
       { id: Date.now(), role: "user", text },
     ])
-    await client.sendText(text, {
-      run_immediately: true,
-      audio_response: voiceEnabledRef.current,
-    })
+    setStatus("thinking")
+
+    const client = await connect()
+    if (!client) {
+      setStatus("idle")
+      return
+    }
+
+    try {
+      await client.sendText(text, {
+        run_immediately: true,
+        audio_response: voiceEnabledRef.current,
+      })
+    } catch (error) {
+      setStatus("idle")
+      toast.error("Message was not sent", {
+        description: error instanceof Error ? error.message : "Try again.",
+      })
+    }
   }, [connect])
 
   return (
