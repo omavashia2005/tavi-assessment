@@ -25,22 +25,28 @@ export default function IntakePage() {
   const [connecting, setConnecting] = useState(false)
   const clientRef = useRef<PipecatClient | null>(null)
   const audioRef = useRef<HTMLAudioElement>(null)
+  const voiceEnabledRef = useRef(false)
 
   useEffect(() => {
     const client = new PipecatClient({
       transport: new SmallWebRTCTransport(),
-      enableMic: true,
+      enableMic: false,
       enableCam: false,
       callbacks: {
         onTrackStarted: (track, participant) => {
-          if (track.kind !== "audio" || participant?.local || !audioRef.current) return
+          if (
+            !voiceEnabledRef.current ||
+            track.kind !== "audio" ||
+            participant?.local ||
+            !audioRef.current
+          ) return
           audioRef.current.srcObject = new MediaStream([track])
           void audioRef.current.play()
         },
-        onUserStartedSpeaking: () => setStatus("listening"),
-        onUserStoppedSpeaking: () => setStatus("thinking"),
+        onUserStartedSpeaking: () => voiceEnabledRef.current && setStatus("listening"),
+        onUserStoppedSpeaking: () => voiceEnabledRef.current && setStatus("thinking"),
         onBotLlmStarted: () => setStatus("thinking"),
-        onBotStoppedSpeaking: () => setStatus("listening"),
+        onBotStoppedSpeaking: () => setStatus(voiceEnabledRef.current ? "listening" : "idle"),
         onUserTranscript: ({ final, text }) => {
           if (!final || !text.trim()) return
           setTurns((previous) => [
@@ -74,18 +80,27 @@ export default function IntakePage() {
     }
   }, [setWorkOrder])
 
-  const connect = useCallback(async () => {
+  const connect = useCallback(async (voice = false) => {
     const client = clientRef.current
-    if (!client || client.state === "ready") return client
+    if (!client) return null
+
+    if (voice && !voiceEnabledRef.current) {
+      voiceEnabledRef.current = true
+      client.enableMic(true)
+      await client.initDevices()
+    }
+    if (client.state === "ready") {
+      setStatus(voice ? "listening" : "idle")
+      return client
+    }
 
     setConnecting(true)
-    setStatus("thinking")
     try {
       await client.startBotAndConnect({
         endpoint: `${PIPECAT_URL}/start`,
         requestData: { transport: "webrtc" },
       })
-      setStatus("listening")
+      setStatus(voice ? "listening" : "idle")
       return client
     } catch (error) {
       setStatus("idle")
@@ -100,15 +115,16 @@ export default function IntakePage() {
 
   const play = useCallback(async () => {
     const client = clientRef.current
-    if (client?.connected) {
+    if (client?.connected && voiceEnabledRef.current) {
       await client.disconnect()
       return
     }
-    await connect()
+    await connect(true)
   }, [connect])
 
   const restart = useCallback(() => {
     void clientRef.current?.disconnect()
+    voiceEnabledRef.current = false
     setStatus("idle")
     setTurns([])
     resetWorkflow()
@@ -121,7 +137,10 @@ export default function IntakePage() {
       ...prev,
       { id: Date.now(), role: "user", text },
     ])
-    await client.sendText(text, { run_immediately: true, audio_response: true })
+    await client.sendText(text, {
+      run_immediately: true,
+      audio_response: voiceEnabledRef.current,
+    })
   }, [connect])
 
   return (

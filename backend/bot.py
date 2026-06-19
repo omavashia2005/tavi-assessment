@@ -4,7 +4,6 @@ from dotenv import load_dotenv
 from fastapi.middleware.cors import CORSMiddleware
 from pipecat.adapters.schemas.function_schema import FunctionSchema
 from pipecat.audio.vad.silero import SileroVADAnalyzer
-from pipecat.frames.frames import LLMRunFrame
 from pipecat.pipeline.pipeline import Pipeline
 from pipecat.pipeline.worker import PipelineParams, PipelineWorker
 from pipecat.processors.aggregators.llm_context import LLMContext
@@ -122,19 +121,6 @@ async def run_bot(transport: BaseTransport, runner_args: RunnerArguments) -> Non
             enable_usage_metrics=True,
         ),
     )
-
-    @worker.rtvi.event_handler("on_client_ready")
-    async def on_client_ready(rtvi) -> None:
-        context.add_message(
-            {
-                "role": "developer",
-                "content": (
-                    "Introduce yourself in one sentence and ask what needs attention "
-                    "and where."
-                ),
-            }
-        )
-        await worker.queue_frames([LLMRunFrame()])
 
     @transport.event_handler("on_client_disconnected")
     async def on_client_disconnected(transport, client) -> None:
