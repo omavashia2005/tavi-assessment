@@ -2,13 +2,16 @@ from schemas import WorkOrder
 
 
 def test_work_order_schema() -> None:
-    work_order = WorkOrder(siteLocation="712 S Forest Ave, Tempe AZ 85281")
+    work_order = WorkOrder(
+        siteLocation="712 S Forest Ave, Tempe AZ 85281",
+        requiredServiceDate="2026-06-29",
+    )
 
     assert work_order.model_dump() == {
         "siteLocation": "712 S Forest Ave, Tempe AZ 85281",
         "serviceType": "",
         "budget": "",
-        "requiredServiceDate": "",
+        "requiredServiceDate": "2026-06-29",
         "outreachMessage": "",
     }
     try:
@@ -24,6 +27,13 @@ def test_work_order_schema() -> None:
         pass
     else:
         raise AssertionError("invalid addresses must be rejected")
+
+    try:
+        WorkOrder(requiredServiceDate="in 10 days")
+    except ValueError:
+        pass
+    else:
+        raise AssertionError("service dates must use YYYY-MM-DD")
 
 
 if __name__ == "__main__":

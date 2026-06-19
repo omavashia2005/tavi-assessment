@@ -9,7 +9,7 @@ export const WorkOrderSchema = z.object({
   ),
   serviceType: z.string(),
   budget: z.string(),
-  requiredServiceDate: z.string(),
+  requiredServiceDate: z.union([z.literal(""), z.iso.date()]),
   outreachMessage: z.string(),
 })
 
