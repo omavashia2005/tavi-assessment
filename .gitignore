@@ -10,7 +10,8 @@ __v0_jsx-dev-runtime.ts
 
 # Environment variables
 .env*.local
-
+backend/.env
+backend/.env.local
 # Common ignores
 node_modules
 .next/

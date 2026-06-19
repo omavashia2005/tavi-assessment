@@ -1,4 +1,4 @@
-# Tavi backend
+#: Tavi backend
 
 Requires Python 3.11+ and an OpenAI API key.
 
@@ -14,3 +14,7 @@ FastAPI runs at `http://localhost:7860`; stop it with `Ctrl+C`.
 
 The frontend uses `POST /start` to create a SmallWebRTC session. Voice and typed
 chat share the same OpenAI conversation and stream validated `WorkOrder` updates.
+
+
+
+
