@@ -17,7 +17,7 @@ from pipecat.runner.types import RunnerArguments
 from pipecat.runner.utils import create_transport
 from pipecat.services.llm_service import FunctionCallParams
 from pipecat.services.openai.llm import OpenAILLMService
-from pipecat.services.openai.stt import OpenAISTTService
+from pipecat.services.openai.stt import OpenAIRealtimeSTTService
 from pipecat.services.openai.tts import OpenAITTSService
 from pipecat.transports.base_transport import BaseTransport, TransportParams
 from pipecat.workers.runner import WorkerRunner
@@ -56,9 +56,9 @@ transport_params = {
 async def run_bot(transport: BaseTransport, runner_args: RunnerArguments) -> None:
     api_key = os.environ["OPENAI_API_KEY"]
 
-    stt = OpenAISTTService(
+    stt = OpenAIRealtimeSTTService(
         api_key=api_key,
-        settings=OpenAISTTService.Settings(
+        settings=OpenAIRealtimeSTTService.Settings(
             model=os.getenv("OPENAI_STT_MODEL", "gpt-4o-transcribe"),
         ),
     )

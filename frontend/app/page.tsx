@@ -160,7 +160,7 @@ export default function IntakePage() {
             <div className="min-h-72">
               <Transcript
                 turns={turns}
-                thinking={false}
+                thinking={status === "thinking"}
                 onSend={(message) => void sendMessage(message)}
                 disabled={connecting}
               />
@@ -171,7 +171,11 @@ export default function IntakePage() {
             <Button
               variant="ghost"
               onClick={restart}
-              disabled={status === "idle" && turns.length === 0}
+              disabled={
+                status === "idle" &&
+                turns.length === 0 &&
+                !Object.values(workOrder).some(Boolean)
+              }
             >
               <RotateCcw data-icon="inline-start" />
               Restart
