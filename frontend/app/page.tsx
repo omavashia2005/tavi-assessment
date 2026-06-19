@@ -168,7 +168,7 @@ export default function IntakePage() {
           </Badge>
         </div>
         <h1 className="text-2xl font-semibold tracking-tight text-balance sm:text-3xl">
-          Create a maintenance work order
+          Create a work order
         </h1>
         <p className="max-w-2xl text-muted-foreground text-pretty">
           Talk or type to Tavi the way you&apos;d brief a colleague. The assistant asks follow-ups and
