@@ -1,4 +1,5 @@
 import re
+from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, field_validator
 
@@ -28,3 +29,18 @@ class WorkOrder(BaseModel):
         if value and not DATE.fullmatch(value):
             raise ValueError("Use ISO date format: YYYY-MM-DD")
         return value
+
+
+class ChatTurn(BaseModel):
+    role: Literal["user", "agent"]
+    text: str
+
+
+class ChatRequest(BaseModel):
+    turns: list[ChatTurn]
+    workOrder: WorkOrder
+
+
+class ChatResponse(BaseModel):
+    assistant: str
+    workOrder: WorkOrder

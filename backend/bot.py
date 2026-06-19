@@ -2,7 +2,9 @@ import os
 from datetime import date
 
 from dotenv import load_dotenv
+from fastapi import HTTPException
 from fastapi.middleware.cors import CORSMiddleware
+from openai import AsyncOpenAI
 from pipecat.adapters.schemas.function_schema import FunctionSchema
 from pipecat.audio.vad.silero import SileroVADAnalyzer
 from pipecat.pipeline.pipeline import Pipeline
@@ -22,9 +24,10 @@ from pipecat.services.openai.tts import OpenAITTSService
 from pipecat.transports.base_transport import BaseTransport, TransportParams
 from pipecat.workers.runner import WorkerRunner
 
-from schemas import WorkOrder
+from schemas import ChatRequest, ChatResponse, WorkOrder
 
 load_dotenv()
+openai = AsyncOpenAI()
 
 app.add_middleware(
     CORSMiddleware,
@@ -50,12 +53,46 @@ unknown fields. Once the core details are known, draft a short outreachMessage.
 Never invent details the user did not provide.
 """.strip()
 
+CHAT_INSTRUCTION = f"""
+You are Tavi, a concise chat assistant creating a facility maintenance work order.
+Ask one short follow-up question at a time. Preserve known work-order values and
+never invent details. Addresses must use "Street Number Street Name, City State ZIP".
+Today is {date.today().isoformat()}; resolve relative dates and store them as
+YYYY-MM-DD. Return the next assistant message and the complete current work order,
+using empty strings for unknown fields.
+""".strip()
+
 transport_params = {
     "webrtc": lambda: TransportParams(
         audio_in_enabled=True,
         audio_out_enabled=True,
     ),
 }
+
+
+@app.post("/api/chat", response_model=ChatResponse)
+async def chat(request: ChatRequest) -> ChatResponse:
+    response = await openai.responses.parse(
+        model=os.getenv("OPENAI_LLM_MODEL", "gpt-4.1-mini"),
+        instructions=CHAT_INSTRUCTION,
+        input=[
+            {
+                "role": "developer",
+                "content": f"Current work order: {request.workOrder.model_dump_json()}",
+            },
+            *[
+                {
+                    "role": "assistant" if turn.role == "agent" else "user",
+                    "content": turn.text,
+                }
+                for turn in request.turns
+            ],
+        ],
+        text_format=ChatResponse,
+    )
+    if not response.output_parsed:
+        raise HTTPException(502, "OpenAI returned no structured chat response")
+    return response.output_parsed
 
 
 async def run_bot(transport: BaseTransport, runner_args: RunnerArguments) -> None:

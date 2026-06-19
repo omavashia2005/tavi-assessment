@@ -1,4 +1,4 @@
-from schemas import WorkOrder
+from schemas import ChatResponse, WorkOrder
 
 
 def test_work_order_schema() -> None:
@@ -34,6 +34,11 @@ def test_work_order_schema() -> None:
         pass
     else:
         raise AssertionError("service dates must use YYYY-MM-DD")
+
+    assert ChatResponse(
+        assistant="What is the service address?",
+        workOrder=WorkOrder(),
+    ).model_dump()["assistant"] == "What is the service address?"
 
 
 if __name__ == "__main__":
