@@ -1,7 +1,12 @@
 import { z } from "zod"
 
+const address = /^\d+\s+[^,]+,\s+[A-Za-z .'-]+\s+[A-Z]{2}\s+\d{5}(?:-\d{4})?$/
+
 export const WorkOrderSchema = z.object({
-  siteLocation: z.string(),
+  siteLocation: z.string().refine(
+    (value) => !value || address.test(value),
+    "Use: Street Number Street Name, City State ZIP",
+  ),
   serviceType: z.string(),
   budget: z.string(),
   requiredServiceDate: z.string(),

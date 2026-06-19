@@ -37,6 +37,8 @@ SYSTEM_INSTRUCTION = """
 You are Tavi, a concise voice assistant creating a facility maintenance work order.
 Ask one short follow-up question at a time until you know the site location, service
 type, budget, and required service date. Keep spoken replies brief and natural.
+Store addresses only as "Street Number Street Name, City State ZIP", for example
+"712 S Forest Ave, Tempe AZ 85281". Ask the user to clarify incomplete addresses.
 
 After every user turn that adds or changes work-order information, call
 update_work_order with the complete current work order. Use an empty string for
@@ -88,7 +90,12 @@ async def run_bot(transport: BaseTransport, runner_args: RunnerArguments) -> Non
         properties={
             name: {
                 "type": "string",
-                "description": f"Current {name}, or an empty string if unknown.",
+                "description": (
+                    "Address formatted as Street Number Street Name, City State ZIP, "
+                    "or empty if unknown."
+                    if name == "siteLocation"
+                    else f"Current {name}, or an empty string if unknown."
+                ),
             }
             for name in WorkOrder.model_fields
         },
