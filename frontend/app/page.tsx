@@ -7,9 +7,8 @@ import { SmallWebRTCTransport } from "@pipecat-ai/small-webrtc-transport"
 import { ArrowRight, RotateCcw, MessageSquareText } from "lucide-react"
 import { toast } from "sonner"
 import { Button } from "@/components/ui/button"
-import { Card, CardContent, CardFooter, CardHeader } from "@/components/ui/card"
+import { Card, CardContent, CardFooter } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
-import { Separator } from "@/components/ui/separator"
 import { VoiceOrb } from "@/components/intake/voice-orb"
 import { Transcript } from "@/components/intake/transcript"
 import { WorkOrderSummary } from "@/components/intake/work-order-summary"
@@ -161,22 +160,24 @@ export default function IntakePage() {
         </p>
       </div>
 
-      <div className="grid gap-6 lg:grid-cols-3">
+      <div className="grid gap-6 lg:grid-cols-4">
         {/* Conversation column */}
-        <Card className="lg:col-span-2">
-          <CardHeader className="border-b border-border pb-4">
-            <div className="flex flex-col items-center gap-6 py-4">
-              <VoiceOrb status={status} onStart={() => void play()} disabled={connecting} />
+        <Card className="lg:col-span-3">
+          <CardContent className="pt-5">
+            <div className="mb-4 flex items-center justify-between gap-3 border-b border-border pb-4">
+              <div>
+                <h2 className="font-medium">Conversation</h2>
+                <p className="text-xs text-muted-foreground">Type below or start voice input.</p>
+              </div>
+              <VoiceOrb
+                status={status}
+                active={voiceEnabledRef.current}
+                onStart={() => void play()}
+                disabled={connecting}
+              />
               <audio ref={audioRef} autoPlay className="hidden" />
             </div>
-          </CardHeader>
-
-          <CardContent className="pt-6">
-            <div className="mb-3 flex items-center gap-2">
-              <h2 className="text-sm font-medium">Transcript</h2>
-              <Separator className="flex-1" />
-            </div>
-            <div className="min-h-72">
+            <div className="min-h-[28rem]">
               <Transcript
                 turns={turns}
                 thinking={status === "thinking"}

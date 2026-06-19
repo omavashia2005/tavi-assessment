@@ -35,8 +35,8 @@ export function Transcript({
   }
 
   return (
-    <div className="flex min-h-72 flex-col">
-      <div ref={messagesRef} className="flex max-h-96 flex-1 flex-col gap-4 overflow-y-auto pr-1">
+    <div className="flex min-h-[28rem] flex-col">
+      <div ref={messagesRef} className="flex max-h-[32rem] flex-1 flex-col gap-4 overflow-y-auto pr-1">
         {turns.length === 0 && (
           <div className="flex min-h-48 flex-1 flex-col items-center justify-center gap-1 text-center">
             <p className="text-sm font-medium text-foreground">No conversation yet</p>
