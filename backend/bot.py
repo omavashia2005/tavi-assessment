@@ -50,7 +50,9 @@ YYYY-MM-DD. Do not ask for clarification when the relative date is unambiguous.
 After every user turn that adds or changes work-order information, call
 update_work_order with the complete current work order. Use an empty string for
 unknown fields. Once the core details are known, draft a short outreachMessage.
-Never invent details the user did not provide.
+Never invent details the user did not provide. The outreach message should contain all the fields you got so the vendor gets 
+maximum information about what the job is, where it is, the budget, and when. Keep the outreach message cordial and make sure you're greeting 
+the vendor and keeping your message short, informative, and professionally warm.
 """.strip()
 
 CHAT_INSTRUCTION = f"""
@@ -59,7 +61,9 @@ Ask one short follow-up question at a time. Preserve known work-order values and
 never invent details. Addresses must use "Street Number Street Name, City State ZIP".
 Today is {date.today().isoformat()}; resolve relative dates and store them as
 YYYY-MM-DD. Return the next assistant message and the complete current work order,
-using empty strings for unknown fields.
+using empty strings for unknown fields. The outreach message should contain all the fields you got so the vendor gets 
+maximum information about what the job is, where it is, the budget, and when. Keep the outreach message cordial and make sure you're greeting 
+the vendor and keeping your message short, informative, and professionally warm.
 """.strip()
 
 transport_params = {
