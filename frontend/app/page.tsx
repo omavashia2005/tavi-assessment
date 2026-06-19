@@ -18,7 +18,7 @@ import { WorkOrderSchema, type AgentStatus, type TranscriptTurn } from "@/lib/ty
 const PIPECAT_URL = process.env.NEXT_PUBLIC_PIPECAT_URL ?? "http://localhost:7860"
 
 export default function IntakePage() {
-  const { workOrder, setWorkOrder, resetWorkflow } = useWorkflow()
+  const { workOrder, setWorkOrder, updateField, resetWorkflow } = useWorkflow()
   const [turns, setTurns] = useState<TranscriptTurn[]>([])
   const [status, setStatus] = useState<AgentStatus>("idle")
   const [connecting, setConnecting] = useState(false)
@@ -216,7 +216,7 @@ export default function IntakePage() {
 
         {/* Live summary column */}
         <div className="lg:col-span-1">
-          <WorkOrderSummary workOrder={workOrder} />
+          <WorkOrderSummary workOrder={workOrder} onChange={updateField} />
         </div>
       </div>
     </div>

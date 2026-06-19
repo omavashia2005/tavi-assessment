@@ -6,22 +6,48 @@ import { cn } from "@/lib/utils"
 import { Progress } from "@/components/ui/progress"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
+import { Input } from "@/components/ui/input"
+import { Textarea } from "@/components/ui/textarea"
 import type { WorkOrder, WorkOrderField } from "@/lib/types"
 
-const FIELDS: { key: WorkOrderField; label: string; icon: LucideIcon }[] = [
-  { key: "siteLocation", label: "Site Location", icon: MapPin },
-  { key: "serviceType", label: "Service Type", icon: Wrench },
-  { key: "budget", label: "Budget", icon: DollarSign },
-  { key: "requiredServiceDate", label: "Required Service Date", icon: CalendarDays },
-  { key: "outreachMessage", label: "Outreach Message Template", icon: MessageSquare },
+const FIELDS: {
+  key: WorkOrderField
+  label: string
+  icon: LucideIcon
+  placeholder: string
+  type?: React.HTMLInputTypeAttribute
+}[] = [
+  {
+    key: "siteLocation",
+    label: "Site Location",
+    icon: MapPin,
+    placeholder: "712 S Forest Ave, Tempe AZ 85281",
+  },
+  { key: "serviceType", label: "Service Type", icon: Wrench, placeholder: "Commercial HVAC repair" },
+  { key: "budget", label: "Budget", icon: DollarSign, placeholder: "$8,000–$14,000" },
+  {
+    key: "requiredServiceDate",
+    label: "Required Service Date",
+    icon: CalendarDays,
+    placeholder: "",
+    type: "date",
+  },
+  {
+    key: "outreachMessage",
+    label: "Outreach Message Template",
+    icon: MessageSquare,
+    placeholder: "Message sent to selected vendors",
+  },
 ]
 
 export function WorkOrderSummary({
   workOrder,
   activeField,
+  onChange,
 }: {
   workOrder: WorkOrder
   activeField?: WorkOrderField | null
+  onChange: (field: WorkOrderField, value: string) => void
 }) {
   const filledCount = FIELDS.filter((f) => workOrder[f.key].trim().length > 0).length
   const progress = Math.round((filledCount / FIELDS.length) * 100)
@@ -73,19 +99,23 @@ export function WorkOrderSummary({
               </div>
               <div className="flex min-w-0 flex-col gap-0.5">
                 <span className="text-xs font-medium text-muted-foreground">{field.label}</span>
-                {filled ? (
-                  <span
-                    className={cn(
-                      "text-sm text-foreground",
-                      field.key === "outreachMessage" ? "line-clamp-3 leading-relaxed" : "font-medium",
-                    )}
-                  >
-                    {value}
-                  </span>
+                {field.key === "outreachMessage" ? (
+                  <Textarea
+                    aria-label={field.label}
+                    value={value}
+                    placeholder={field.placeholder}
+                    onChange={(event) => onChange(field.key, event.target.value)}
+                    className="mt-1 min-h-20 resize-none"
+                  />
                 ) : (
-                  <span className="text-sm text-muted-foreground/60">
-                    {isActive ? "Capturing…" : "Awaiting details"}
-                  </span>
+                  <Input
+                    aria-label={field.label}
+                    type={field.type}
+                    value={value}
+                    placeholder={isActive ? "Capturing…" : field.placeholder}
+                    onChange={(event) => onChange(field.key, event.target.value)}
+                    className="mt-1"
+                  />
                 )}
               </div>
             </div>
