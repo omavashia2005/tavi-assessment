@@ -33,10 +33,9 @@ class WorkOrder(BaseModel):
 
 class VendorResult(BaseModel):
     name: str = Field(description="Full business name")
-    contactInfo: str = Field(description="Phone, address, and/or website")
+    contactInfo: str = Field(description="Phone number")
     reviewScore: str = Field(description="BBB rating or brief review summary")
     avgCost: str = Field(default="", description="Average cost estimate, empty if unavailable")
-    distanceMiles: float = Field(description="Approximate miles from the job site")
 
 
 class VendorSearchResponse(BaseModel):

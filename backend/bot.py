@@ -1,7 +1,10 @@
 import asyncio
+import urllib.parse
 import os
 from datetime import date
-
+from geopy.geocoders import Nominatim
+from geopy.location import Location
+from typing import cast
 from dotenv import load_dotenv
 from fastapi import HTTPException
 from fastapi.middleware.cors import CORSMiddleware
@@ -41,8 +44,11 @@ app.add_middleware(
 
 SYSTEM_INSTRUCTION = f"""
 You are Tavi, a concise voice assistant creating a facility maintenance work order.
-Ask one short follow-up question at a time until you know the site location, service
-type, budget, and required service date. Keep spoken replies brief and natural.
+Ask one short follow-up question at a time until you know the site location, problem,
+budget, and required service date. Keep spoken replies brief and natural. Infer
+serviceType yourself from the problem described; do not ask the user to choose it.
+Use the concise vendor trade that should handle the work, such as Janitor, Plumber,
+HVAC, Electrical, Locksmith, Pest Control, or another best-fitting trade.
 Store addresses only as "Street Number Street Name, City State ZIP", for example
 "712 S Forest Ave, Tempe AZ 85281". Ask the user to clarify incomplete addresses.
 Today is {date.today().isoformat()}. Resolve relative dates such as "tomorrow",
@@ -60,7 +66,10 @@ the vendor and keeping your message short, informative, and professionally warm.
 CHAT_INSTRUCTION = f"""
 You are Tavi, a concise chat assistant creating a facility maintenance work order.
 Ask one short follow-up question at a time. Preserve known work-order values and
-never invent details. Addresses must use "Street Number Street Name, City State ZIP".
+never invent details. Infer serviceType yourself from the user's description; do not
+ask the user to choose it. Use the concise vendor trade that should handle the work,
+such as Janitor, Plumber, HVAC, Electrical, Locksmith, Pest Control, or another
+best-fitting trade. Addresses must use "Street Number Street Name, City State ZIP".
 Today is {date.today().isoformat()}; resolve relative dates and store them as
 YYYY-MM-DD. Return the next assistant message and the complete current work order,
 using empty strings for unknown fields. The outreach message should contain all the fields you got so the vendor gets 
@@ -101,61 +110,83 @@ async def chat(request: ChatRequest) -> ChatResponse:
     return response.output_parsed
 
 
-_fc = Firecrawl(api_key=os.environ.get("FIRECRAWL_API_KEY", ""))
-_vendor_cache: dict[str, dict] = {}  # ponytail: in-process cache, cleared on restart
-_vendor_in_flight: dict[str, asyncio.Task] = {}  # dedupe concurrent identical requests
-_VENDOR_SCHEMA = VendorSearchResponse.model_json_schema()
+firecrawl = Firecrawl(api_key=os.environ.get("FIRECRAWL_API_KEY", ""))
+
+# _vendor_cache: dict[str, dict] = {}  # ponytail: in-process cache, cleared on restart
+# _vendor_in_flight: dict[str, asyncio.Task] = {}  # dedupe concurrent identical requests
+# _VENDOR_SCHEMA = VendorSearchResponse.model_json_schema()
+#
+# # ponytail: hardcoded mocks, regenerate if the schema changes
+# _MOCK_VENDORS = {
+#     "vendors": [
+#         {"name": "Sunbelt Mechanical Services", "contactInfo": "(602) 555-0142 · 4120 E Broadway Rd, Phoenix AZ 85040 · sunbeltmech.com", "reviewScore": "A+ BBB rating · 4.9/5 (312 reviews)", "avgCost": "$9,500", "distanceMiles": 2.4},
+#         {"name": "Desert Climate Pros", "contactInfo": "(480) 555-0118 · 2200 W Guadalupe Rd, Mesa AZ 85202 · desertclimatepros.com", "reviewScore": "A+ BBB rating · 4.8/5 (248 reviews)", "avgCost": "$11,200", "distanceMiles": 5.1},
+#         {"name": "Valley HVAC Specialists", "contactInfo": "(602) 555-0177 · 815 N 7th Ave, Phoenix AZ 85007 · valleyhvac.com", "reviewScore": "A BBB rating · 4.7/5 (189 reviews)", "avgCost": "$8,800", "distanceMiles": 6.8},
+#         {"name": "Premier Commercial Refrigeration", "contactInfo": "(623) 555-0156 · 9701 W Camelback Rd, Glendale AZ 85305 · premiercommref.com", "reviewScore": "A+ BBB rating · 4.7/5 (164 reviews)", "avgCost": "", "distanceMiles": 9.3},
+#         {"name": "Arizona Air & Energy", "contactInfo": "(480) 555-0193 · 1450 E Indian School Rd, Scottsdale AZ 85251 · azairenergy.com", "reviewScore": "A BBB rating · 4.6/5 (411 reviews)", "avgCost": "$12,400", "distanceMiles": 11.7},
+#         {"name": "Copperline Mechanical", "contactInfo": "(602) 555-0164 · 320 E Buckeye Rd, Phoenix AZ 85004 · copperlinemech.com", "reviewScore": "A BBB rating · 4.5/5 (97 reviews)", "avgCost": "$10,150", "distanceMiles": 14.2},
+#         {"name": "Saguaro Service Co.", "contactInfo": "(480) 555-0109 · 6310 E Thomas Rd, Scottsdale AZ 85251 · saguaroservice.com", "reviewScore": "A BBB rating · 4.5/5 (76 reviews)", "avgCost": "", "distanceMiles": 16.0},
+#         {"name": "Cactus State HVAC", "contactInfo": "(623) 555-0131 · 5050 N 35th Ave, Phoenix AZ 85017 · cactusstatehvac.com", "reviewScore": "B+ BBB rating · 4.3/5 (58 reviews)", "avgCost": "$7,900", "distanceMiles": 17.8},
+#         {"name": "Mesa Climate Control", "contactInfo": "(480) 555-0175 · 1230 S Country Club Dr, Mesa AZ 85210 · mesaclimate.com", "reviewScore": "B+ BBB rating · 4.2/5 (44 reviews)", "avgCost": "$9,000", "distanceMiles": 18.9},
+#         {"name": "Phoenix Mechanical Group", "contactInfo": "(602) 555-0186 · 7707 N Black Canyon Hwy, Phoenix AZ 85021 · phxmechgroup.com", "reviewScore": "B BBB rating · 4.0/5 (29 reviews)", "avgCost": "", "distanceMiles": 19.6},
+#     ],
+# }
 
 
-async def _run_vendor_search(order: WorkOrder, cache_key: str) -> dict:
-    """Always writes to cache, even if all clients disconnect. Single source of Firecrawl calls."""
-    prompt = (
-        f"Search the Better Business Bureau (BBB) for accredited businesses that provide "
-        f"'{order.serviceType}' services within a strict 20-mile radius of {order.siteLocation}. "
-        f"Do NOT include any business located more than 20 miles away. "
-        f"Return the top 20 results ranked from best to worst by BBB rating and customer reviews. "
-        f"For each business return: full business name, contact info (phone, address, website), "
-        f"BBB rating or a brief review score summary, average cost estimate if listed, "
-        f"and approximate distance in miles from {order.siteLocation}. "
-        f"Budget context: {order.budget or 'not specified'}. "
-        f"Service needed by: {order.requiredServiceDate or 'flexible'}."
-    )
-    result = await asyncio.to_thread(
-        _fc.agent,
-        prompt=prompt,
-        urls=["http://bbb.org"],
-        schema=_VENDOR_SCHEMA,
-        model="spark-1-mini",
-        max_credits=500,
-    )
-    if not result or not getattr(result, "data", None):
-        raise RuntimeError("Firecrawl agent returned no data")
-    _vendor_cache[cache_key] = result.data
-    return result.data
 
+geolocator = Nominatim(user_agent="tavi-hackathon")
 
 @app.post("/api/vendor-search", response_model=VendorSearchResponse)
 async def vendor_search(order: WorkOrder) -> VendorSearchResponse:
     if not order.siteLocation or not order.serviceType:
         raise HTTPException(422, "siteLocation and serviceType are required")
 
-    cache_key = f"{order.siteLocation}|{order.serviceType}|{order.budget}|{order.requiredServiceDate}"
-    if cache_key in _vendor_cache:
-        return VendorSearchResponse.model_validate(_vendor_cache[cache_key])
+    address_string = order.siteLocation
 
-    # Dedupe: if an identical search is already running, wait on the same task.
-    # asyncio.shield() ensures the search keeps running even if THIS client disconnects.
-    task = _vendor_in_flight.get(cache_key)
-    if task is None:
-        task = asyncio.create_task(_run_vendor_search(order, cache_key))
-        _vendor_in_flight[cache_key] = task
-        task.add_done_callback(lambda _t: _vendor_in_flight.pop(cache_key, None))
+    location = cast(Location | None, geolocator.geocode(address_string))
 
-    try:
-        data = await asyncio.shield(task)
-    except RuntimeError as e:
-        raise HTTPException(502, str(e))
-    return VendorSearchResponse.model_validate(data)
+    # 2. Define the base URL
+    base_url = "https://www.bbb.org/search"
+
+
+    if not location:
+        raise HTTPException(status_code=403)
+        
+    city, state, _ = address_string.split(",", 1)[1].strip().rsplit(" ", 2)
+
+    # 3. Put all your fields into a dictionary
+    params = {
+        "filter_category": "10113-100",
+        "filter_distance": "25",
+        "filter_ratings": "A",
+        "filter_sa": "1",
+        "find_country": "USA",
+        "find_entity": "10113-000",
+        "find_latlng": f"{location.latitude},{location.longitude}",
+        "find_loc": f"{city}, {state}",
+        "find_text": f"{order.serviceType}",
+        "find_type": "Category",
+        "page": "1",
+        "touched": "4"
+    }
+
+    # 4. Generate the final, safe URL
+    final_url = f"{base_url}?{urllib.parse.urlencode(params)}"
+
+
+
+    data = firecrawl.scrape(
+        final_url, 
+        formats=[{
+            "type": "json", 
+            "schema": VendorSearchResponse, 
+            "prompt": "I just want a simple JSON object in the aforementioned schema"
+        }]
+    )
+
+    search_result = data.json
+
+    return VendorSearchResponse.model_validate(search_result)
 
 
 async def run_bot(transport: BaseTransport, runner_args: RunnerArguments) -> None:
@@ -198,6 +229,13 @@ async def run_bot(transport: BaseTransport, runner_args: RunnerArguments) -> Non
                     "Address formatted as Street Number Street Name, City State ZIP, "
                     "or empty if unknown."
                     if name == "siteLocation"
+                    else (
+                        "Concise vendor trade inferred from the user's problem, such "
+                        "as Janitor, Plumber, HVAC, Electrical, Locksmith, Pest "
+                        "Control, or another best-fitting trade; empty if the problem "
+                        "is not known."
+                    )
+                    if name == "serviceType"
                     else "Required service date as YYYY-MM-DD, or empty if unknown."
                     if name == "requiredServiceDate"
                     else f"Current {name}, or an empty string if unknown."
