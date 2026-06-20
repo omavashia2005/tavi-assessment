@@ -91,11 +91,11 @@ sequenceDiagram
 
 ```mermaid
 graph LR
-  Mic -->|audio in| STT["STT<br/>gpt-4o-transcribe"]
-  STT --> AGG["User<br/>aggregator"]
-  AGG --> LLM["LLM<br/>gpt-4.1-mini"]
-  LLM -->|update_work_order tool| UI["Frontend UI<br/>(server message)"]
-  LLM --> TTS["TTS<br/>gpt-4o-mini-tts"]
+  Mic -->|audio in| STT[STT gpt-4o-transcribe]
+  STT --> AGG[User aggregator]
+  AGG --> LLM[LLM gpt-4.1-mini]
+  LLM -->|update_work_order| UI[Frontend UI]
+  LLM --> TTS[TTS gpt-4o-mini-tts]
   TTS -->|audio out| Speaker
 ```
 

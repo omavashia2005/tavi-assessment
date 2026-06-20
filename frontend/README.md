@@ -8,36 +8,36 @@ Next.js app for work-order intake and vendor management.
 
 ```mermaid
 graph TD
-  WP["WorkflowProvider<br/>React context + localStorage"]
-  ES["EventSource<br/>GET /api/receive-messages"]
-  PC["PipecatClient<br/>WebRTC transport"]
+  WP[WorkflowProvider]
+  ES[EventSource SSE]
+  PC[PipecatClient WebRTC]
 
   WP -- subscribes --> ES
   ES -- vendor messages --> WP
 
-  IntakePage["/ — Intake"] -- voice --> PC
-  IntakePage -- text chat --> ChatAPI["POST /api/chat"]
-  IntakePage -- place order --> WorkOrderAPI["POST /api/work-order"]
+  IntakePage[Intake /] -- voice --> PC
+  IntakePage -- text chat --> ChatAPI[POST /api/chat]
+  IntakePage -- place order --> WorkOrderAPI[POST /api/work-order]
 
-  OrdersPage["/orders — Orders"] -- send message --> SendAPI["POST /api/send-message"]
+  OrdersPage[Orders /orders] -- send message --> SendAPI[POST /api/send-message]
 
   WP --> IntakePage
   WP --> OrdersPage
-  PC -- work order tool call --> WP
+  PC -- work order update --> WP
 ```
 
 ### Intake page modes
 
 ```mermaid
 flowchart LR
-  A([User opens /]) --> B{choose mode}
-  B -- voice --> C["PipecatClient<br/>WebRTC to /start"]
-  B -- text --> D["fetch POST /api/chat"]
-  C --> E["LLM fills work order<br/>via server message"]
+  A([User opens /]) --> B{mode?}
+  B -- voice --> C[PipecatClient WebRTC]
+  B -- text --> D[POST /api/chat]
+  C --> E[LLM fills work order]
   D --> E
   E --> F{all fields filled?}
-  F -- yes --> G["Place Order<br/>POST /api/work-order"]
-  G --> H["/orders — vendor cards<br/>+ SSE replies"]
+  F -- yes --> G[POST /api/work-order]
+  G --> H[/orders with vendor cards]
 ```
 
 ## Getting Started

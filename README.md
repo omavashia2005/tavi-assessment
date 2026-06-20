@@ -6,17 +6,11 @@ AI-assisted work-order intake and vendor management.
 
 ```mermaid
 graph LR
-  FE["Frontend<br/>Next.js :3000"]
-  BE["Backend<br/>FastAPI :7860"]
-  OAI["OpenAI API<br/>LLM · STT · TTS"]
-  FC["Firecrawl<br/>scrape BBB.org"]
-  DB[("SQLite")]
-
-  FE -- "WebRTC (voice)" --> BE
-  FE -- "REST + SSE" --> BE
-  BE --> OAI
-  BE --> FC
-  BE --- DB
+  FE[Frontend Next.js] -- WebRTC voice --> BE[Backend FastAPI]
+  FE -- REST + SSE --> BE
+  BE --> OAI[OpenAI API]
+  BE --> FC[Firecrawl]
+  BE --- DB[(SQLite)]
 ```
 
 ## Repos
