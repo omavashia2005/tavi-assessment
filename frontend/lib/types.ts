@@ -50,11 +50,21 @@ export const VendorResultSchema = z.object({
 export type VendorResult = z.infer<typeof VendorResultSchema>
 
 export const VendorSearchResponseSchema = z.object({
-  work_order_id: z.string().default(""),
   vendors: z.array(VendorResultSchema),
 })
 
 export type VendorSearchResponse = z.infer<typeof VendorSearchResponseSchema>
+
+export const WorkOrderResponseSchema = VendorSearchResponseSchema.extend({
+  work_order_id: z.string(),
+})
+
+export type WorkOrderResponse = z.infer<typeof WorkOrderResponseSchema>
+
+export const SendMessageRequestSchema = z.object({
+  vendorId: z.string(),
+  response: z.string().min(1),
+})
 
 export const SendMessageResponseSchema = z.object({
   work_order_id: z.string(),

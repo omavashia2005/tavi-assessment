@@ -3,9 +3,10 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from "react"
 import { toast } from "sonner"
 import {
+  SendMessageRequestSchema,
   SendMessageResponseSchema,
   VendorMessageSchema,
-  VendorSearchResponseSchema,
+  WorkOrderResponseSchema,
   type VendorMessage,
   type VendorResult,
   type WorkOrder,
@@ -119,10 +120,10 @@ export function WorkflowProvider({ children }: { children: React.ReactNode }) {
       body: JSON.stringify(snapshot),
     })
     if (!response.ok) throw new Error(await response.text().catch(() => "Place order failed"))
-    const parsed = VendorSearchResponseSchema.parse(await response.json())
+    const parsed = WorkOrderResponseSchema.parse(await response.json())
     setPlacedOrders((prev) => [
       {
-        id: parsed.work_order_id || crypto.randomUUID(),
+        id: parsed.work_order_id,
         placedAt: Date.now(),
         workOrder: snapshot,
         vendors: parsed.vendors,
@@ -133,10 +134,11 @@ export function WorkflowProvider({ children }: { children: React.ReactNode }) {
   }, [workOrder])
 
   const sendMessage = useCallback(async (vendorId: string, response: string) => {
+    const body = SendMessageRequestSchema.parse({ vendorId, response })
     const res = await fetch(`${PIPECAT_URL}/api/send-message`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ vendorId, response }),
+      body: JSON.stringify(body),
     })
     if (!res.ok) throw new Error(await res.text().catch(() => "Send failed"))
     const data = SendMessageResponseSchema.parse(await res.json())
