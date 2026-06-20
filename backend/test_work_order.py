@@ -22,6 +22,7 @@ VENDORS = [
         contactInfo="555-0100",
         reviewScore="A",
         avgCost=f"${index},000",
+        vendorState="SELECTED",
     )
     for index in range(1, 7)
 ]
@@ -35,15 +36,21 @@ def test_submit_work_order() -> None:
     with patch("bot.vendor_search", fake_vendor_search):
         response = asyncio.run(submit_work_order(ORDER, background_tasks))
 
-    assert response.vendors == VENDORS[:5]
+    assert [vendor.vendorState for vendor in response.vendors] == [
+        "AWAITING_RESPONSE"
+    ] * 5
     assert len(background_tasks.tasks) == 1
-    assert background_tasks.tasks[0].args == (ORDER, VENDORS[:5])
+    assert background_tasks.tasks[0].args == (ORDER, response.vendors)
 
 
 def test_persist_work_order_vendors() -> None:
     with tempfile.NamedTemporaryFile(suffix=".db") as file:
         init_db(file.name)
-        _persist_work_order_vendors(ORDER, VENDORS[:5], db_path=file.name)
+        vendors = [
+            vendor.model_copy(update={"vendorState": "AWAITING_RESPONSE"})
+            for vendor in VENDORS[:5]
+        ]
+        _persist_work_order_vendors(ORDER, vendors, db_path=file.name)
         work_orders = list_work_orders(db_path=file.name)
         saved_vendors = list_vendors(
             work_orders[0]["work_order_id"], db_path=file.name

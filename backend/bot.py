@@ -159,7 +159,10 @@ async def vendor_search(order: WorkOrder) -> VendorSearchResponse:
         ],
     )
 
-    return VendorSearchResponse.model_validate(data.json)
+    result = VendorSearchResponse.model_validate(data.json)
+    for vendor in result.vendors:
+        vendor.vendorState = "AWAITING_RESPONSE"
+    return result
 
 
 @app.post("/api/work-order", response_model=VendorSearchResponse)
@@ -180,7 +183,12 @@ async def submit_work_order(
         )
 
     result = await vendor_search(order)
-    response = VendorSearchResponse(vendors=result.vendors[:5])
+    response = VendorSearchResponse(
+        vendors=[
+            vendor.model_copy(update={"vendorState": "AWAITING_RESPONSE"})
+            for vendor in result.vendors[:5]
+        ]
+    )
     background_tasks.add_task(_persist_work_order_vendors, order, response.vendors)
     return response
 
