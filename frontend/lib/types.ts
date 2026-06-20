@@ -21,7 +21,6 @@ export const VendorResultSchema = z.object({
   contactInfo: z.string(),
   reviewScore: z.string(),
   avgCost: z.string().default(""),
-  distanceMiles: z.number(),
 })
 
 export type VendorResult = z.infer<typeof VendorResultSchema>

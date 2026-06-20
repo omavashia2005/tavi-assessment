@@ -117,7 +117,6 @@ function VendorRow({ vendor }: { vendor: VendorResult }) {
             <Star className="size-3" aria-hidden="true" />
             {vendor.reviewScore || "—"}
           </span>
-          <span className="tabular-nums">{vendor.distanceMiles.toFixed(1)} mi</span>
         </div>
       </div>
       {vendor.avgCost ? (
