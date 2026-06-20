@@ -227,13 +227,17 @@ async def submit_work_order(
         )
 
     result = await vendor_search(order)
+    selected_vendors = [
+        vendor.model_copy(update={"vendorState": "AWAITING_RESPONSE"})
+        for vendor in result.vendors[:5]
+    ]
+    work_order, vendors = _persist_work_order_vendors(order, selected_vendors)
     response = VendorSearchResponse(
         vendors=[
-            vendor.model_copy(update={"vendorState": "AWAITING_RESPONSE"})
-            for vendor in result.vendors[:5]
+            vendor.model_copy(update={"vendorId": saved["vendor_id"]})
+            for vendor, saved in zip(selected_vendors, vendors, strict=True)
         ]
     )
-    work_order, vendors = _persist_work_order_vendors(order, response.vendors)
     vendor = random.choice(vendors)
     background_tasks.add_task(
         generate_response,

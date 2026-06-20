@@ -49,6 +49,9 @@ def test_submit_work_order() -> None:
     assert [vendor.vendorState for vendor in response.vendors] == [
         "AWAITING_RESPONSE"
     ] * 5
+    assert [vendor.vendorId for vendor in response.vendors] == [
+        f"vendor-{index}" for index in range(5)
+    ]
     assert len(background_tasks.tasks) == 1
     assert background_tasks.tasks[0].func is generate_response
     assert background_tasks.tasks[0].args == (

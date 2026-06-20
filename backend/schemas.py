@@ -32,6 +32,7 @@ class WorkOrder(BaseModel):
 
 
 class VendorResult(BaseModel):
+    vendorId: str = ""
     name: str = Field(description="Full business name")
     contactInfo: str = Field(description="Phone number")
     reviewScore: str = Field(description="BBB rating or brief review summary")
@@ -69,5 +70,6 @@ class ReceiveMessageRequest(BaseModel):
 
 
 class VendorConversation(BaseModel):
+    vendor_id: str
     vendor_response: str
     agent_response: str

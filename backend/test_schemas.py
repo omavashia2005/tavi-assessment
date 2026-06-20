@@ -45,9 +45,11 @@ def test_work_order_schema() -> None:
         generated_message="I can visit Tuesday.",
     ).vendor_id == "vendor-1"
     assert VendorConversation(
+        vendor_id="vendor-1",
         vendor_response="I can visit Tuesday.",
         agent_response="Tuesday works.",
     ).model_dump() == {
+        "vendor_id": "vendor-1",
         "vendor_response": "I can visit Tuesday.",
         "agent_response": "Tuesday works.",
     }
