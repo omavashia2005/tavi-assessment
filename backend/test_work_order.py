@@ -5,9 +5,14 @@ from unittest.mock import patch
 
 from fastapi import BackgroundTasks
 
-from bot import _persist_work_order_vendors, generate_response, submit_work_order
+from bot import (
+    _persist_work_order_vendors,
+    generate_response,
+    receive_message,
+    submit_work_order,
+)
 from db import init_db, list_vendors, list_work_orders
-from schemas import VendorResult, VendorSearchResponse, WorkOrder
+from schemas import ReceiveMessageRequest, VendorResult, VendorSearchResponse, WorkOrder
 
 
 ORDER = WorkOrder(
@@ -110,7 +115,48 @@ def test_generate_response_posts_to_receive_message() -> None:
     )
 
 
+def test_receive_message_posts_conversation_to_frontend() -> None:
+    request = ReceiveMessageRequest(
+        vendor_id="vendor-1",
+        work_order_id="order-1",
+        generated_message="We can quote $8,500.",
+    )
+    with (
+        patch("bot.get_work_order", return_value={"work_order_id": "order-1"}),
+        patch(
+            "bot.get_vendor",
+            return_value={
+                "vendor_id": "vendor-1",
+                "work_order_id": "order-1",
+                "outreach_message": ORDER.outreachMessage,
+            },
+        ),
+        patch(
+            "bot.openai.responses.create",
+            return_value=SimpleNamespace(output_text="Can you complete it by June 29?"),
+        ) as create,
+        patch("bot._post_json", return_value={}) as post,
+        patch.dict(
+            "os.environ",
+            {"FRONTEND_RECEIVE_MESSAGE_URL": "http://frontend.test/api/messages"},
+        ),
+    ):
+        response = asyncio.run(receive_message(request))
+
+    create.assert_awaited_once()
+    assert response.vendor_id == "vendor-1"
+    post.assert_called_once_with(
+        "http://frontend.test/api/messages",
+        {
+            "vendor_id": "vendor-1",
+            "vendor_response": "We can quote $8,500.",
+            "agent_response": "Can you complete it by June 29?",
+        },
+    )
+
+
 if __name__ == "__main__":
     test_submit_work_order()
     test_persist_work_order_vendors()
     test_generate_response_posts_to_receive_message()
+    test_receive_message_posts_conversation_to_frontend()

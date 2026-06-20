@@ -7,7 +7,7 @@ import urllib.parse
 import urllib.request
 from typing import cast
 
-from db import DB_PATH, create_vendor, create_work_order
+from db import DB_PATH, create_vendor, create_work_order, get_vendor, get_work_order
 from dotenv import load_dotenv
 from fastapi import BackgroundTasks, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
@@ -36,11 +36,18 @@ from pipecat.workers.runner import WorkerRunner
 from schemas import (
     ChatRequest,
     ChatResponse,
+    ReceiveMessageRequest,
+    VendorConversation,
     VendorResult,
     VendorSearchResponse,
     WorkOrder,
 )
-from system_prompts import CHAT_INSTRUCTION, SYSTEM_INSTRUCTION, VENDOR_ROLEPLAY
+from system_prompts import (
+    CHAT_INSTRUCTION,
+    SYSTEM_INSTRUCTION,
+    VENDOR_REPLY,
+    VENDOR_ROLEPLAY,
+)
 
 load_dotenv()
 openai = AsyncOpenAI()
@@ -129,6 +136,41 @@ async def generate_response(
             "generated_message": response.output_text,
         },
     )
+
+
+@app.post("/receive-message", response_model=VendorConversation)
+async def receive_message(request: ReceiveMessageRequest) -> VendorConversation:
+    work_order = get_work_order(request.work_order_id)
+    vendor = get_vendor(request.vendor_id)
+    if not work_order or not vendor or vendor["work_order_id"] != request.work_order_id:
+        raise HTTPException(404, "Work order or vendor not found")
+
+    response = await openai.responses.create(
+        model=os.getenv("OPENAI_LLM_MODEL", "gpt-4.1-mini"),
+        input=VENDOR_REPLY.format(
+            work_order_id=work_order["work_order_id"],
+            vendor_id=vendor["vendor_id"],
+            outreach_message=vendor["outreach_message"],
+            vendor_message=request.generated_message,
+        ),
+    )
+    if not response.output_text:
+        raise HTTPException(502, "OpenAI returned no agent response")
+
+    conversation = VendorConversation(
+        vendor_id=vendor["vendor_id"],
+        vendor_response=request.generated_message,
+        agent_response=response.output_text,
+    )
+    await asyncio.to_thread(
+        _post_json,
+        os.getenv(
+            "FRONTEND_RECEIVE_MESSAGE_URL",
+            f"{os.getenv('FRONTEND_ORIGIN', 'http://localhost:3000').rstrip('/')}/api/receive-message",
+        ),
+        conversation.model_dump(),
+    )
+    return conversation
 
 
 @app.post("/api/chat", response_model=ChatResponse)
