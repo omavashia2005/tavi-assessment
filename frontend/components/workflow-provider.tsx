@@ -40,6 +40,8 @@ type WorkflowContextValue = {
   placeOrder: () => Promise<void>
   vendorMessages: Record<string, VendorMessage>
   sendMessage: (vendorId: string, response: string) => Promise<void>
+  unreadVendorIds: Set<string>
+  markVendorRead: (vendorId: string) => void
 }
 
 const WorkflowContext = createContext<WorkflowContextValue | null>(null)
@@ -48,6 +50,7 @@ export function WorkflowProvider({ children }: { children: React.ReactNode }) {
   const [workOrder, setWorkOrder] = useState<WorkOrder>(EMPTY_WORK_ORDER)
   const [placedOrders, setPlacedOrders] = useState<PlacedOrder[]>([])
   const [vendorMessages, setVendorMessages] = useState<Record<string, VendorMessage>>({})
+  const [unreadVendorIds, setUnreadVendorIds] = useState<Set<string>>(new Set())
   const [hydrated, setHydrated] = useState(false)
 
   // Ref so the SSE handler can look up vendor names from the latest placedOrders
@@ -64,6 +67,11 @@ export function WorkflowProvider({ children }: { children: React.ReactNode }) {
         if (parsed.success) {
           const message = parsed.data
           setVendorMessages((prev) => ({ ...prev, [message.vendor_id]: message }))
+          setUnreadVendorIds((prev) => {
+            const next = new Set(prev)
+            next.add(message.vendor_id)
+            return next
+          })
           setPlacedOrders((prev) =>
             prev.map((order) =>
               order.id !== message.work_order_id
@@ -179,6 +187,15 @@ export function WorkflowProvider({ children }: { children: React.ReactNode }) {
     )
   }, [])
 
+  const markVendorRead = useCallback((vendorId: string) => {
+    setUnreadVendorIds((prev) => {
+      if (!prev.has(vendorId)) return prev
+      const next = new Set(prev)
+      next.delete(vendorId)
+      return next
+    })
+  }, [])
+
   const value = useMemo<WorkflowContextValue>(
     () => ({
       workOrder,
@@ -189,8 +206,20 @@ export function WorkflowProvider({ children }: { children: React.ReactNode }) {
       placeOrder,
       vendorMessages,
       sendMessage,
+      unreadVendorIds,
+      markVendorRead,
     }),
-    [workOrder, updateField, resetWorkflow, placedOrders, placeOrder, vendorMessages, sendMessage],
+    [
+      workOrder,
+      updateField,
+      resetWorkflow,
+      placedOrders,
+      placeOrder,
+      vendorMessages,
+      sendMessage,
+      unreadVendorIds,
+      markVendorRead,
+    ],
   )
 
   return <WorkflowContext.Provider value={value}>{children}</WorkflowContext.Provider>

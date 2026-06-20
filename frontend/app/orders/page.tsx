@@ -189,7 +189,7 @@ function FilterSelect({
 }
 
 function OrderDetail({ order }: { order: PlacedOrder }) {
-  const { vendorMessages } = useWorkflow()
+  const { unreadVendorIds, markVendorRead } = useWorkflow()
   const [openVendorIndex, setOpenVendorIndex] = useState<number | null>(null)
   const openVendor = openVendorIndex == null ? null : order.vendors[openVendorIndex] ?? null
 
@@ -209,8 +209,11 @@ function OrderDetail({ order }: { order: PlacedOrder }) {
             <VendorCard
               key={`${order.id}-${i}`}
               vendor={vendor}
-              hasResponse={Boolean(vendorMessages[vendor.id])}
-              onOpen={() => setOpenVendorIndex(i)}
+              hasUnread={unreadVendorIds.has(vendor.id)}
+              onOpen={() => {
+                markVendorRead(vendor.id)
+                setOpenVendorIndex(i)
+              }}
             />
           ))}
         </div>
@@ -225,11 +228,11 @@ function OrderDetail({ order }: { order: PlacedOrder }) {
 
 function VendorCard({
   vendor,
-  hasResponse,
+  hasUnread,
   onOpen,
 }: {
   vendor: VendorResult
-  hasResponse: boolean
+  hasUnread: boolean
   onOpen: () => void
 }) {
   const isWinning = vendor.vendorState === "SELECTED"
@@ -240,10 +243,10 @@ function VendorCard({
       className={cn(
         "group relative flex h-full flex-col gap-4 rounded-xl border border-border bg-card p-5 text-left transition-all hover:-translate-y-0.5 hover:border-foreground/20 hover:shadow-lg focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-ring/50",
         isWinning && "border-emerald-500/40 shadow-emerald-500/10 shadow-lg",
-        hasResponse && !isWinning && "border-primary/60 ring-2 ring-primary/30 shadow-lg shadow-primary/10",
+        hasUnread && !isWinning && "border-primary/60 ring-2 ring-primary/30 shadow-lg shadow-primary/10",
       )}
     >
-      {hasResponse ? (
+      {hasUnread ? (
         <Badge className="absolute -top-2 -right-2 gap-1 shadow-sm">
           <MessageSquare className="size-3" />
           New reply
