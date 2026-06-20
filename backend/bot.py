@@ -26,7 +26,7 @@ from pipecat.services.openai.tts import OpenAITTSService
 from pipecat.transports.base_transport import BaseTransport, TransportParams
 from pipecat.workers.runner import WorkerRunner
 
-from schemas import ChatRequest, ChatResponse, VendorSearchResponse, WorkOrder  # noqa: F401
+from schemas import ChatRequest, ChatResponse, VendorSearchResponse, WorkOrder
 
 load_dotenv()
 openai = AsyncOpenAI()
