@@ -66,7 +66,7 @@ def test_work_order_schema() -> None:
     )
     assert SendMessageResponse(
         work_order_id="order-1",
-        work_order_state="AUCTIONING",
+        work_order_state="Auctioning",
         vendor_id="vendor-1",
         vendor_state="NEGOTIATING",
     ).vendor_state == "NEGOTIATING"

@@ -93,6 +93,16 @@ class StateTransition(BaseModel):
     ]
 
 
-class SendMessageResponse(StateTransition):
+class SendMessageResponse(BaseModel):
     work_order_id: str
+    work_order_state: Literal[
+        "Contacting Vendors",
+        "Auctioning",
+        "Vendor Assigned",
+        "Site Visit",
+        "Order Complete",
+    ]
     vendor_id: str
+    vendor_state: Literal[
+        "AWAITING_RESPONSE", "NEGOTIATING", "QUOTE_RECEIVED", "SELECTED"
+    ]
