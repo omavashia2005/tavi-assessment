@@ -1,6 +1,10 @@
+import asyncio
+import json
 import os
+import random
 import re
 import urllib.parse
+import urllib.request
 from typing import cast
 
 from db import DB_PATH, create_vendor, create_work_order
@@ -36,7 +40,7 @@ from schemas import (
     VendorSearchResponse,
     WorkOrder,
 )
-from system_prompts import CHAT_INSTRUCTION, SYSTEM_INSTRUCTION
+from system_prompts import CHAT_INSTRUCTION, SYSTEM_INSTRUCTION, VENDOR_ROLEPLAY
 
 load_dotenv()
 openai = AsyncOpenAI()
@@ -67,7 +71,7 @@ def _money(value: str) -> float:
 
 def _persist_work_order_vendors(
     order: WorkOrder, vendors: list[VendorResult], *, db_path=DB_PATH
-) -> None:
+) -> tuple[dict, list[dict]]:
     work_order = create_work_order(
         location=order.siteLocation,
         type=order.serviceType,
@@ -75,16 +79,56 @@ def _persist_work_order_vendors(
         date=order.requiredServiceDate,
         db_path=db_path,
     )
+    saved_vendors = []
     for vendor in vendors:
-        create_vendor(
-            work_order_id=work_order["work_order_id"],
-            name=vendor.name,
-            # ponytail: DB requires a price; use 0 until it supports unknown costs.
-            price=_money(vendor.avgCost),
-            outreach_message=order.outreachMessage,
-            vendor_state=vendor.vendorState,
-            db_path=db_path,
+        saved_vendors.append(
+            create_vendor(
+                work_order_id=work_order["work_order_id"],
+                name=vendor.name,
+                # ponytail: DB requires a price; use 0 until it supports unknown costs.
+                price=_money(vendor.avgCost),
+                outreach_message=order.outreachMessage,
+                vendor_state=vendor.vendorState,
+                db_path=db_path,
+            )
         )
+    return work_order, saved_vendors
+
+
+def _post_json(url: str, payload: dict) -> dict:
+    request = urllib.request.Request(
+        url,
+        data=json.dumps(payload).encode(),
+        headers={"Content-Type": "application/json"},
+        method="POST",
+    )
+    with urllib.request.urlopen(request, timeout=15) as response:
+        body = response.read()
+    return json.loads(body) if body else {}
+
+
+async def generate_response(
+    outreach_message: str, vendor_id: str, work_order_id: str
+) -> None:
+    response = await openai.responses.create(
+        model=os.getenv("OPENAI_LLM_MODEL", "gpt-4.1-mini"),
+        input=VENDOR_ROLEPLAY.format(
+            vendor_id=vendor_id,
+            work_order_id=work_order_id,
+            outreach_message=outreach_message,
+        ),
+    )
+    if not response.output_text:
+        raise RuntimeError("OpenAI returned no vendor response")
+    await asyncio.to_thread(
+        _post_json,
+        f"{os.getenv('INTERNAL_API_URL', 'http://127.0.0.1:7860').rstrip('/')}/receive-message",
+        {
+            "vendor_id": vendor_id,
+            "work_order_id": work_order_id,
+            "generated_message": response.output_text,
+        },
+    )
 
 
 @app.post("/api/chat", response_model=ChatResponse)
@@ -189,7 +233,14 @@ async def submit_work_order(
             for vendor in result.vendors[:5]
         ]
     )
-    background_tasks.add_task(_persist_work_order_vendors, order, response.vendors)
+    work_order, vendors = _persist_work_order_vendors(order, response.vendors)
+    vendor = random.choice(vendors)
+    background_tasks.add_task(
+        generate_response,
+        order.outreachMessage,
+        vendor["vendor_id"],
+        work_order["work_order_id"],
+    )
     return response
 
 

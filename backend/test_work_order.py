@@ -1,10 +1,11 @@
 import asyncio
 import tempfile
+from types import SimpleNamespace
 from unittest.mock import patch
 
 from fastapi import BackgroundTasks
 
-from bot import _persist_work_order_vendors, submit_work_order
+from bot import _persist_work_order_vendors, generate_response, submit_work_order
 from db import init_db, list_vendors, list_work_orders
 from schemas import VendorResult, VendorSearchResponse, WorkOrder
 
@@ -32,15 +33,29 @@ def test_submit_work_order() -> None:
     async def fake_vendor_search(order: WorkOrder) -> VendorSearchResponse:
         return VendorSearchResponse(vendors=VENDORS)
 
+    saved_work_order = {"work_order_id": "order-1"}
+    saved_vendors = [{"vendor_id": f"vendor-{index}"} for index in range(5)]
     background_tasks = BackgroundTasks()
-    with patch("bot.vendor_search", fake_vendor_search):
+    with (
+        patch("bot.vendor_search", fake_vendor_search),
+        patch(
+            "bot._persist_work_order_vendors",
+            return_value=(saved_work_order, saved_vendors),
+        ),
+        patch("bot.random.choice", return_value=saved_vendors[0]),
+    ):
         response = asyncio.run(submit_work_order(ORDER, background_tasks))
 
     assert [vendor.vendorState for vendor in response.vendors] == [
         "AWAITING_RESPONSE"
     ] * 5
     assert len(background_tasks.tasks) == 1
-    assert background_tasks.tasks[0].args == (ORDER, response.vendors)
+    assert background_tasks.tasks[0].func is generate_response
+    assert background_tasks.tasks[0].args == (
+        ORDER.outreachMessage,
+        "vendor-0",
+        "order-1",
+    )
 
 
 def test_persist_work_order_vendors() -> None:
@@ -50,7 +65,9 @@ def test_persist_work_order_vendors() -> None:
             vendor.model_copy(update={"vendorState": "AWAITING_RESPONSE"})
             for vendor in VENDORS[:5]
         ]
-        _persist_work_order_vendors(ORDER, vendors, db_path=file.name)
+        work_order, persisted_vendors = _persist_work_order_vendors(
+            ORDER, vendors, db_path=file.name
+        )
         work_orders = list_work_orders(db_path=file.name)
         saved_vendors = list_vendors(
             work_orders[0]["work_order_id"], db_path=file.name
@@ -64,8 +81,33 @@ def test_persist_work_order_vendors() -> None:
     assert {vendor["vendor_state"] for vendor in saved_vendors} == {
         "AWAITING_RESPONSE"
     }
+    assert work_order["work_order_id"] == work_orders[0]["work_order_id"]
+    assert persisted_vendors == saved_vendors
+
+
+def test_generate_response_posts_to_receive_message() -> None:
+    with (
+        patch(
+            "bot.openai.responses.create",
+            return_value=SimpleNamespace(output_text="We can quote $8,500."),
+        ) as create,
+        patch("bot._post_json", return_value={}) as post,
+        patch.dict("os.environ", {"INTERNAL_API_URL": "http://backend.test"}),
+    ):
+        asyncio.run(generate_response("Please quote the job.", "vendor-1", "order-1"))
+
+    create.assert_awaited_once()
+    post.assert_called_once_with(
+        "http://backend.test/receive-message",
+        {
+            "vendor_id": "vendor-1",
+            "work_order_id": "order-1",
+            "generated_message": "We can quote $8,500.",
+        },
+    )
 
 
 if __name__ == "__main__":
     test_submit_work_order()
     test_persist_work_order_vendors()
+    test_generate_response_posts_to_receive_message()
