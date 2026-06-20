@@ -83,7 +83,7 @@ export function WorkflowProvider({ children }: { children: React.ReactNode }) {
 
   const placeOrder = useCallback(async () => {
     const snapshot = workOrder
-    const response = await fetch(`${PIPECAT_URL}/api/vendor-search`, {
+    const response = await fetch(`${PIPECAT_URL}/api/work-order`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(snapshot),
