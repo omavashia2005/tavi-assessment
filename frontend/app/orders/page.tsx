@@ -6,7 +6,7 @@ import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { useWorkflow } from "@/components/workflow-provider"
-import type { VendorResult } from "@/components/workflow-provider"
+import type { VendorResult } from "@/lib/types"
 
 const FORMATTER = new Intl.DateTimeFormat("en-US", {
   month: "short",

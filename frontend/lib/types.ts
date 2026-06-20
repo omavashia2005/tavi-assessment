@@ -16,23 +16,21 @@ export const WorkOrderSchema = z.object({
 export type WorkOrder = z.infer<typeof WorkOrderSchema>
 export type WorkOrderField = keyof WorkOrder
 
-export const VendorSchema = z.object({
-  id: z.string(),
+export const VendorResultSchema = z.object({
   name: z.string(),
-  rating: z.number(),
-  reviewCount: z.number(),
-  distance: z.number(),
-  priceMin: z.number(),
-  priceMax: z.number(),
-  description: z.string(),
-  phone: z.string(),
-  email: z.string(),
-  specialties: z.array(z.string()),
-  responseTime: z.string(),
-  verified: z.boolean(),
+  contactInfo: z.string(),
+  reviewScore: z.string(),
+  avgCost: z.string().default(""),
+  distanceMiles: z.number(),
 })
 
-export type Vendor = z.infer<typeof VendorSchema>
+export type VendorResult = z.infer<typeof VendorResultSchema>
+
+export const VendorSearchResponseSchema = z.object({
+  vendors: z.array(VendorResultSchema),
+})
+
+export type VendorSearchResponse = z.infer<typeof VendorSearchResponseSchema>
 
 export const AgentStatusSchema = z.enum([
   "idle",

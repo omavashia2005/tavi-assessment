@@ -1,7 +1,7 @@
 "use client"
 
 import { createContext, useCallback, useContext, useEffect, useMemo, useState } from "react"
-import type { WorkOrder } from "@/lib/types"
+import { VendorSearchResponseSchema, type VendorResult, type WorkOrder } from "@/lib/types"
 
 const EMPTY_WORK_ORDER: WorkOrder = {
   siteLocation: "",
@@ -12,14 +12,6 @@ const EMPTY_WORK_ORDER: WorkOrder = {
 }
 
 const PIPECAT_URL = process.env.NEXT_PUBLIC_PIPECAT_URL ?? "http://localhost:7860"
-
-export type VendorResult = {
-  name: string
-  contactInfo: string
-  reviewScore: string
-  avgCost: string
-  distanceMiles: number
-}
 
 export type PlacedOrder = {
   id: string
@@ -81,13 +73,13 @@ export function WorkflowProvider({ children }: { children: React.ReactNode }) {
       body: JSON.stringify(snapshot),
     })
     if (!response.ok) throw new Error(await response.text().catch(() => "Place order failed"))
-    const data = await response.json() as { vendors?: VendorResult[] }
+    const parsed = VendorSearchResponseSchema.parse(await response.json())
     setPlacedOrders((prev) => [
       {
         id: crypto.randomUUID(),
         placedAt: Date.now(),
         workOrder: snapshot,
-        vendors: data.vendors ?? [],
+        vendors: parsed.vendors,
       },
       ...prev,
     ])
