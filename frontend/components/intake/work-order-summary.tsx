@@ -1,8 +1,9 @@
 "use client"
 
 import { useState } from "react"
-import Link from "next/link"
-import { MapPin, Wrench, DollarSign, CalendarDays, MessageSquare, Check, Expand, X } from "lucide-react"
+import { useRouter } from "next/navigation"
+import { toast } from "sonner"
+import { MapPin, Wrench, DollarSign, CalendarDays, MessageSquare, Check, Expand, Loader2, X } from "lucide-react"
 import type { LucideIcon } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { Progress } from "@/components/ui/progress"
@@ -11,6 +12,7 @@ import { Badge } from "@/components/ui/badge"
 import { Input } from "@/components/ui/input"
 import { Textarea } from "@/components/ui/textarea"
 import { Button } from "@/components/ui/button"
+import { useWorkflow } from "@/components/workflow-provider"
 import type { WorkOrder, WorkOrderField } from "@/lib/types"
 
 const FIELDS: {
@@ -52,7 +54,10 @@ export function WorkOrderSummary({
   activeField?: WorkOrderField | null
   onChange: (field: WorkOrderField, value: string) => void
 }) {
+  const router = useRouter()
+  const { placeOrder } = useWorkflow()
   const [expanded, setExpanded] = useState(false)
+  const [placing, setPlacing] = useState(false)
   const filledCount = FIELDS.filter((f) => workOrder[f.key].trim().length > 0).length
   const progress = Math.round((filledCount / FIELDS.length) * 100)
   const coreComplete = ["siteLocation", "serviceType", "budget", "requiredServiceDate"].every(
@@ -172,8 +177,25 @@ export function WorkOrderSummary({
             </CardHeader>
             <CardContent>{fields(true)}</CardContent>
             <div className="flex justify-end border-t border-border px-6 pt-4">
-              <Button disabled={!coreComplete} nativeButton={false} render={coreComplete ? <Link href="/discovery" /> : <span />}>
-                Start vendor discovery
+              <Button
+                disabled={!coreComplete || placing}
+                onClick={async () => {
+                  setPlacing(true)
+                  try {
+                    await placeOrder()
+                    setExpanded(false)
+                    router.push("/orders")
+                  } catch (error) {
+                    toast.error("Could not place work order", {
+                      description: error instanceof Error ? error.message : "Try again.",
+                    })
+                  } finally {
+                    setPlacing(false)
+                  }
+                }}
+              >
+                {placing ? <Loader2 className="animate-spin" data-icon="inline-start" /> : null}
+                Place work order
               </Button>
             </div>
           </Card>

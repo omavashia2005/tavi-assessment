@@ -1,10 +1,10 @@
 "use client"
 
 import { useCallback, useEffect, useRef, useState } from "react"
-import Link from "next/link"
+import { useRouter } from "next/navigation"
 import { PipecatClient } from "@pipecat-ai/client-js"
 import { SmallWebRTCTransport } from "@pipecat-ai/small-webrtc-transport"
-import { ArrowRight, RotateCcw, MessageSquareText } from "lucide-react"
+import { ArrowRight, Loader2, RotateCcw, MessageSquareText } from "lucide-react"
 import { toast } from "sonner"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardFooter } from "@/components/ui/card"
@@ -23,10 +23,12 @@ import {
 const PIPECAT_URL = process.env.NEXT_PUBLIC_PIPECAT_URL ?? "http://localhost:7860"
 
 export default function IntakePage() {
-  const { workOrder, setWorkOrder, updateField, resetWorkflow } = useWorkflow()
+  const router = useRouter()
+  const { workOrder, setWorkOrder, updateField, resetWorkflow, placeOrder } = useWorkflow()
   const [turns, setTurns] = useState<TranscriptTurn[]>([])
   const [status, setStatus] = useState<AgentStatus>("idle")
   const [connecting, setConnecting] = useState(false)
+  const [placing, setPlacing] = useState(false)
   const clientRef = useRef<PipecatClient | null>(null)
   const audioRef = useRef<HTMLAudioElement>(null)
   const voiceEnabledRef = useRef(false)
@@ -232,15 +234,28 @@ export default function IntakePage() {
             {(() => {
               const complete = (["siteLocation", "serviceType", "budget", "requiredServiceDate"] as const)
                 .every((f) => workOrder[f].trim().length > 0)
-              return complete ? (
-                <Button nativeButton={false} render={<Link href="/discovery" />}>
-                  Discover vendors
-                  <ArrowRight data-icon="inline-end" />
-                </Button>
-              ) : (
-                <Button disabled title="Complete the work order to continue">
-                  Discover vendors
-                  <ArrowRight data-icon="inline-end" />
+              const handlePlace = async () => {
+                setPlacing(true)
+                try {
+                  await placeOrder()
+                  router.push("/orders")
+                } catch (error) {
+                  toast.error("Could not place work order", {
+                    description: error instanceof Error ? error.message : "Try again.",
+                  })
+                } finally {
+                  setPlacing(false)
+                }
+              }
+              return (
+                <Button
+                  onClick={handlePlace}
+                  disabled={!complete || placing}
+                  title={!complete ? "Complete the work order to continue" : undefined}
+                >
+                  {placing ? <Loader2 className="animate-spin" data-icon="inline-start" /> : null}
+                  Place work order
+                  {!placing ? <ArrowRight data-icon="inline-end" /> : null}
                 </Button>
               )
             })()}
