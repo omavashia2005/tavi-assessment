@@ -17,4 +17,4 @@ node_modules
 .next/
 .DS_Store
 tool_docs
-backend/tavi-assessment.db
+~/tavi-hackathon/backend/tavi-assessment.db
