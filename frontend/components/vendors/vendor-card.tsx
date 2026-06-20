@@ -1,98 +1,73 @@
 "use client"
 
-import { Star, MapPin, Phone, Mail, Clock, BadgeCheck } from "lucide-react"
+import { Star, MapPin, DollarSign, Building2 } from "lucide-react"
 import { cn } from "@/lib/utils"
-import { Card } from "@/components/ui/card"
+import { Card, CardContent } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
-import { Checkbox } from "@/components/ui/checkbox"
-import type { Vendor } from "@/lib/types"
 
-function formatPrice(value: number) {
-  return `$${(value / 1000).toFixed(value % 1000 === 0 ? 0 : 1)}k`
+export type VendorResult = {
+  name: string
+  contactInfo: string
+  reviewScore: string
+  avgCost: string
+  distanceMiles: number
 }
 
-export function VendorCard({
-  vendor,
-  selected,
-  onToggle,
-}: {
-  vendor: Vendor
-  selected: boolean
-  onToggle: () => void
-}) {
+export function VendorCard({ vendor, rank }: { vendor: VendorResult; rank: number }) {
+  const isTop = rank === 1
+
   return (
     <Card
       className={cn(
-        "group relative cursor-pointer gap-0 p-0 transition-all hover:border-primary/40 hover:shadow-md",
-        selected && "border-primary ring-1 ring-primary",
+        "relative gap-0 p-0 transition-all",
+        isTop && "border-warning/60 ring-1 ring-warning/30 shadow-sm",
       )}
-      onClick={onToggle}
     >
-      <div className="flex items-start gap-3 p-5">
-        <Checkbox
-          checked={selected}
-          onClick={(e) => e.stopPropagation()}
-          onCheckedChange={onToggle}
-          aria-label={`Select ${vendor.name}`}
-          className="mt-1"
-        />
-        <div className="flex min-w-0 flex-1 flex-col gap-3">
-          <div className="flex items-start justify-between gap-2">
-            <div className="flex min-w-0 flex-col gap-1">
-              <div className="flex items-center gap-1.5">
-                <h3 className="truncate font-semibold text-foreground">{vendor.name}</h3>
-                {vendor.verified && (
-                  <BadgeCheck className="size-4 shrink-0 text-primary" aria-label="Verified" />
-                )}
-              </div>
-              <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-sm">
-                <span className="flex items-center gap-1 font-medium">
-                  <Star className="size-3.5 fill-warning text-warning" />
-                  {vendor.rating.toFixed(1)}
-                  <span className="font-normal text-muted-foreground">({vendor.reviewCount})</span>
-                </span>
-                <span className="flex items-center gap-1 text-muted-foreground">
-                  <MapPin className="size-3.5" />
-                  {vendor.distance.toFixed(1)} mi
-                </span>
-                <span className="flex items-center gap-1 text-muted-foreground">
-                  <Clock className="size-3.5" />
-                  {vendor.responseTime}
-                </span>
-              </div>
-            </div>
-            <div className="flex shrink-0 flex-col items-end">
-              <span className="text-sm font-semibold text-foreground">
-                {formatPrice(vendor.priceMin)} – {formatPrice(vendor.priceMax)}
-              </span>
-              <span className="text-xs text-muted-foreground">est. range</span>
-            </div>
-          </div>
-
-          <p className="text-sm leading-relaxed text-muted-foreground text-pretty">
-            {vendor.description}
-          </p>
-
-          <div className="flex flex-wrap gap-1.5">
-            {vendor.specialties.map((s) => (
-              <Badge key={s} variant="secondary" className="font-normal">
-                {s}
-              </Badge>
-            ))}
-          </div>
-
-          <div className="flex flex-wrap items-center gap-x-4 gap-y-1 border-t border-border pt-3 text-xs text-muted-foreground">
-            <span className="flex items-center gap-1.5">
-              <Phone className="size-3.5" />
-              {vendor.phone}
-            </span>
-            <span className="flex items-center gap-1.5">
-              <Mail className="size-3.5" />
-              {vendor.email}
-            </span>
-          </div>
-        </div>
+      {/* Rank badge */}
+      <div
+        className={cn(
+          "absolute top-3 right-3 flex size-7 items-center justify-center rounded-full text-xs font-semibold",
+          isTop
+            ? "bg-warning text-warning-foreground"
+            : "bg-muted text-muted-foreground",
+        )}
+        aria-label={`Rank ${rank}`}
+      >
+        {rank}
       </div>
+
+      <CardContent className="flex flex-col gap-3 p-5">
+        {/* Name */}
+        <div className="flex items-start gap-2 pr-10">
+          <Building2 className="mt-0.5 size-4 shrink-0 text-muted-foreground" />
+          <h3 className="font-semibold leading-snug text-foreground">{vendor.name}</h3>
+        </div>
+
+        {/* Metrics row */}
+        <div className="flex flex-wrap gap-x-4 gap-y-1.5 text-sm">
+          <span className="flex items-center gap-1.5">
+            <MapPin className="size-3.5 shrink-0 text-muted-foreground" />
+            <span className="text-foreground">{vendor.distanceMiles.toFixed(1)} mi</span>
+          </span>
+
+          <span className="flex items-center gap-1.5">
+            <Star className="size-3.5 shrink-0 text-warning fill-warning" />
+            <span className="text-foreground">{vendor.reviewScore}</span>
+          </span>
+
+          {vendor.avgCost && (
+            <span className="flex items-center gap-1.5">
+              <DollarSign className="size-3.5 shrink-0 text-muted-foreground" />
+              <span className="text-foreground">{vendor.avgCost}</span>
+            </span>
+          )}
+        </div>
+
+        {/* Contact info */}
+        <p className="border-t border-border pt-3 text-xs text-muted-foreground leading-relaxed">
+          {vendor.contactInfo}
+        </p>
+      </CardContent>
     </Card>
   )
 }

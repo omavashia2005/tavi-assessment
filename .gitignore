@@ -16,4 +16,4 @@ backend/.env.local
 node_modules
 .next/
 .DS_Store
-
+tool_docs

@@ -1,9 +1,11 @@
+import asyncio
 import os
 from datetime import date
 
 from dotenv import load_dotenv
 from fastapi import HTTPException
 from fastapi.middleware.cors import CORSMiddleware
+from firecrawl import Firecrawl
 from openai import AsyncOpenAI
 from pipecat.adapters.schemas.function_schema import FunctionSchema
 from pipecat.audio.vad.silero import SileroVADAnalyzer
@@ -24,7 +26,7 @@ from pipecat.services.openai.tts import OpenAITTSService
 from pipecat.transports.base_transport import BaseTransport, TransportParams
 from pipecat.workers.runner import WorkerRunner
 
-from schemas import ChatRequest, ChatResponse, WorkOrder
+from schemas import ChatRequest, ChatResponse, VendorSearchResponse, WorkOrder
 
 load_dotenv()
 openai = AsyncOpenAI()
@@ -97,6 +99,69 @@ async def chat(request: ChatRequest) -> ChatResponse:
     if not response.output_parsed:
         raise HTTPException(502, "OpenAI returned no structured chat response")
     return response.output_parsed
+
+
+_fc = Firecrawl(api_key=os.environ.get("FIRECRAWL_API_KEY", ""))
+_vendor_cache: dict[str, dict] = {}  # ponytail: in-process cache, cleared on restart
+
+_VENDOR_SCHEMA = {
+    "type": "object",
+    "properties": {
+        "vendors": {
+            "type": "array",
+            "description": "Businesses ranked best to worst by rating and relevance",
+            "items": {
+                "type": "object",
+                "properties": {
+                    "name":         {"type": "string", "description": "Business name"},
+                    "contactInfo":  {"type": "string", "description": "Phone, address, and/or website"},
+                    "reviewScore":  {"type": "string", "description": "BBB rating or review summary"},
+                    "avgCost":      {"type": "string", "description": "Average cost estimate, empty if unavailable"},
+                    "distanceMiles":{"type": "number", "description": "Approximate miles from the job site"},
+                },
+                "required": ["name", "contactInfo", "reviewScore", "distanceMiles"],
+            },
+        }
+    },
+    "required": ["vendors"],
+}
+
+
+@app.post("/api/vendor-search", response_model=VendorSearchResponse)
+async def vendor_search(order: WorkOrder) -> VendorSearchResponse:
+    if not order.siteLocation or not order.serviceType:
+        raise HTTPException(422, "siteLocation and serviceType are required")
+
+    cache_key = f"{order.siteLocation}|{order.serviceType}|{order.budget}|{order.requiredServiceDate}"
+    if cache_key in _vendor_cache:
+        return VendorSearchResponse.model_validate(_vendor_cache[cache_key])
+
+    prompt = (
+        f"Search the Better Business Bureau (BBB) for accredited businesses that provide "
+        f"'{order.serviceType}' services within a strict 20-mile radius of {order.siteLocation}. "
+        f"Do NOT include any business located more than 20 miles away. "
+        f"Return the top 20 results ranked from best to worst by BBB rating and customer reviews. "
+        f"For each business return: full business name, contact info (phone, address, website), "
+        f"BBB rating or a brief review score summary, average cost estimate if listed, "
+        f"and approximate distance in miles from {order.siteLocation}. "
+        f"Budget context: {order.budget or 'not specified'}. "
+        f"Service needed by: {order.requiredServiceDate or 'flexible'}."
+    )
+
+    result = await asyncio.to_thread(
+        _fc.agent,
+        prompt=prompt,
+        urls=["http://bbb.org"],
+        schema=_VENDOR_SCHEMA,
+        model="spark-1-mini",
+        max_credits=500,
+    )
+
+    if not result or not getattr(result, "data", None):
+        raise HTTPException(502, "Firecrawl agent returned no data")
+
+    _vendor_cache[cache_key] = result.data
+    return VendorSearchResponse.model_validate(result.data)
 
 
 async def run_bot(transport: BaseTransport, runner_args: RunnerArguments) -> None:

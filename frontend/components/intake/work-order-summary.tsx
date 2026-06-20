@@ -55,6 +55,9 @@ export function WorkOrderSummary({
   const [expanded, setExpanded] = useState(false)
   const filledCount = FIELDS.filter((f) => workOrder[f.key].trim().length > 0).length
   const progress = Math.round((filledCount / FIELDS.length) * 100)
+  const coreComplete = ["siteLocation", "serviceType", "budget", "requiredServiceDate"].every(
+    (f) => workOrder[f as keyof typeof workOrder].trim().length > 0,
+  )
 
   const fields = (large = false) => (
     <div className={cn("flex flex-col gap-1", large && "grid gap-4 md:grid-cols-2")}>
@@ -169,8 +172,8 @@ export function WorkOrderSummary({
             </CardHeader>
             <CardContent>{fields(true)}</CardContent>
             <div className="flex justify-end border-t border-border px-6 pt-4">
-              <Button nativeButton={false} render={<Link href="/review" />}>
-                Review work order
+              <Button disabled={!coreComplete} nativeButton={false} render={coreComplete ? <Link href="/discovery" /> : <span />}>
+                Start vendor discovery
               </Button>
             </div>
           </Card>

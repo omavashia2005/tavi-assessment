@@ -31,6 +31,18 @@ class WorkOrder(BaseModel):
         return value
 
 
+class VendorResult(BaseModel):
+    name: str
+    contactInfo: str
+    reviewScore: str
+    avgCost: str = ""
+    distanceMiles: float
+
+
+class VendorSearchResponse(BaseModel):
+    vendors: list[VendorResult]
+
+
 class ChatTurn(BaseModel):
     role: Literal["user", "agent"]
     text: str

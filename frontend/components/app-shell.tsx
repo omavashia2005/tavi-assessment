@@ -5,6 +5,8 @@ import { usePathname } from "next/navigation"
 import { Check } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { Badge } from "@/components/ui/badge"
+import { useWorkflow } from "@/components/workflow-provider"
+import type { WorkOrder } from "@/lib/types"
 
 const STEPS = [
   { href: "/", label: "Intake", step: 1 },
@@ -12,6 +14,18 @@ const STEPS = [
   { href: "/vendors", label: "Vendors", step: 3 },
   { href: "/launch", label: "Launch", step: 4 },
 ] as const
+
+const REQUIRED: (keyof WorkOrder)[] = ["siteLocation", "serviceType", "budget", "requiredServiceDate"]
+
+function workOrderComplete(wo: WorkOrder) {
+  return REQUIRED.every((f) => wo[f].trim().length > 0)
+}
+
+function vendorsFound(wo: WorkOrder) {
+  if (typeof window === "undefined") return false
+  const key = `vendor-search:${wo.siteLocation}|${wo.serviceType}|${wo.budget}|${wo.requiredServiceDate}`
+  return !!sessionStorage.getItem(key)
+}
 
 function TaviMark() {
   return (
@@ -42,7 +56,16 @@ function currentStepFor(pathname: string) {
 
 export function AppShell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname()
+  const { workOrder, selectedVendorIds } = useWorkflow()
   const activeStep = currentStepFor(pathname)
+
+  function isUnlocked(step: number) {
+    if (step <= 1) return true
+    if (step === 2) return workOrderComplete(workOrder)
+    if (step === 3) return vendorsFound(workOrder)
+    if (step === 4) return selectedVendorIds.length > 0
+    return false
+  }
 
   return (
     <div className="flex min-h-screen flex-col bg-background">
@@ -56,29 +79,44 @@ export function AppShell({ children }: { children: React.ReactNode }) {
             {STEPS.map((s, i) => {
               const isDone = s.step < activeStep
               const isActive = s.step === activeStep
-              return (
-                <div key={s.href} className="flex items-center gap-1">
-                  <Link
-                    href={s.href}
-                    aria-current={isActive ? "step" : undefined}
+              const unlocked = isUnlocked(s.step)
+
+              const pill = (
+                <span
+                  className={cn(
+                    "flex items-center gap-2 rounded-full px-3 py-1.5 text-sm transition-colors",
+                    isActive && "bg-accent text-accent-foreground font-medium",
+                    !isActive && unlocked && "text-muted-foreground hover:bg-accent hover:text-accent-foreground",
+                    !unlocked && "cursor-not-allowed opacity-40",
+                  )}
+                >
+                  <span
                     className={cn(
-                      "flex items-center gap-2 rounded-full px-3 py-1.5 text-sm transition-colors hover:bg-accent hover:text-accent-foreground focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-ring/50",
-                      isActive && "bg-accent text-accent-foreground font-medium",
-                      !isActive && "text-muted-foreground",
+                      "flex size-5 items-center justify-center rounded-full text-[11px] font-semibold",
+                      isDone && "bg-primary text-primary-foreground",
+                      isActive && "bg-primary text-primary-foreground",
+                      !isDone && !isActive && "border border-border bg-card text-muted-foreground",
                     )}
                   >
-                    <span
-                      className={cn(
-                        "flex size-5 items-center justify-center rounded-full text-[11px] font-semibold",
-                        isDone && "bg-primary text-primary-foreground",
-                        isActive && "bg-primary text-primary-foreground",
-                        !isDone && !isActive && "border border-border bg-card text-muted-foreground",
-                      )}
+                    {isDone ? <Check className="size-3" /> : s.step}
+                  </span>
+                  {s.label}
+                </span>
+              )
+
+              return (
+                <div key={s.href} className="flex items-center gap-1">
+                  {unlocked ? (
+                    <Link
+                      href={s.href}
+                      aria-current={isActive ? "step" : undefined}
+                      className="focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-ring/50 rounded-full"
                     >
-                      {isDone ? <Check className="size-3" /> : s.step}
-                    </span>
-                    {s.label}
-                  </Link>
+                      {pill}
+                    </Link>
+                  ) : (
+                    <span aria-disabled="true">{pill}</span>
+                  )}
                   {i < STEPS.length - 1 && (
                     <div className="h-px w-4 bg-border" aria-hidden="true" />
                   )}
@@ -104,18 +142,31 @@ export function AppShell({ children }: { children: React.ReactNode }) {
           </span>
           <span className="text-xs font-semibold">{STEPS[activeStep - 1].label}</span>
           <div className="ml-auto flex gap-1">
-            {STEPS.map((s) => (
-              <Link
-                key={s.href}
-                href={s.href}
-                aria-label={`Go to step ${s.step}: ${s.label}`}
-                aria-current={s.step === activeStep ? "step" : undefined}
-                className={cn(
-                  "h-2 w-6 rounded-full transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
-                  s.step <= activeStep ? "bg-primary" : "bg-border",
-                )}
-              />
-            ))}
+            {STEPS.map((s) => {
+              const unlocked = isUnlocked(s.step)
+              const dot = (
+                <span
+                  className={cn(
+                    "h-2 w-6 rounded-full transition-colors",
+                    s.step <= activeStep ? "bg-primary" : "bg-border",
+                    !unlocked && "opacity-40",
+                  )}
+                />
+              )
+              return unlocked ? (
+                <Link
+                  key={s.href}
+                  href={s.href}
+                  aria-label={`Go to step ${s.step}: ${s.label}`}
+                  aria-current={s.step === activeStep ? "step" : undefined}
+                  className="focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                >
+                  {dot}
+                </Link>
+              ) : (
+                <span key={s.href} aria-disabled="true">{dot}</span>
+              )
+            })}
           </div>
         </div>
       </header>

@@ -1,6 +1,6 @@
 "use client"
 
-import { createContext, useCallback, useContext, useMemo, useState } from "react"
+import { createContext, useCallback, useContext, useEffect, useMemo, useState } from "react"
 import type { WorkOrder } from "@/lib/types"
 
 const EMPTY_WORK_ORDER: WorkOrder = {
@@ -24,8 +24,18 @@ type WorkflowContextValue = {
 const WorkflowContext = createContext<WorkflowContextValue | null>(null)
 
 export function WorkflowProvider({ children }: { children: React.ReactNode }) {
-  const [workOrder, setWorkOrder] = useState<WorkOrder>(EMPTY_WORK_ORDER)
+  const [workOrder, setWorkOrder] = useState<WorkOrder>(() => {
+    try {
+      const saved = sessionStorage.getItem("tavi:workOrder")
+      if (saved) return { ...EMPTY_WORK_ORDER, ...JSON.parse(saved) }
+    } catch { /* SSR or quota */ }
+    return EMPTY_WORK_ORDER
+  })
   const [selectedVendorIds, setSelectedVendorIds] = useState<string[]>([])
+
+  useEffect(() => {
+    try { sessionStorage.setItem("tavi:workOrder", JSON.stringify(workOrder)) } catch { /* quota */ }
+  }, [workOrder])
 
   const updateField = useCallback((field: keyof WorkOrder, value: string) => {
     setWorkOrder((prev) => ({ ...prev, [field]: value }))
