@@ -1,10 +1,18 @@
 import asyncio
+import json
 import os
 import random
 import re
 import urllib.parse
 from typing import cast
-from db import DB_PATH, create_vendor, create_work_order, get_vendor, get_work_order
+from db import (
+    DB_PATH,
+    create_vendor,
+    create_work_order,
+    get_vendor,
+    get_work_order,
+    update_order_vendor_states,
+)
 from dotenv import load_dotenv
 from fastapi import BackgroundTasks, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
@@ -36,6 +44,9 @@ from schemas import (
     ChatRequest,
     ChatResponse,
     ReceiveMessageRequest,
+    SendMessageRequest,
+    SendMessageResponse,
+    StateTransition,
     VendorConversation,
     VendorResult,
     VendorSearchResponse,
@@ -44,6 +55,7 @@ from schemas import (
 )
 from system_prompts import (
     CHAT_INSTRUCTION,
+    STATE_TRANSITION,
     SYSTEM_INSTRUCTION,
     VENDOR_REPLY,
     VENDOR_ROLEPLAY,
@@ -72,11 +84,35 @@ transport_params = {
 # ponytail: process-local stream is enough for one server; use DB/pubsub for multiple workers.
 vendor_messages: dict[str, VendorConversation] = {}
 message_subscribers: set[asyncio.Queue[VendorConversation]] = set()
+WORK_ORDER_STATES = (
+    "CONTACTING_VENDORS",
+    "AUCTIONING",
+    "VENDOR ASSIGNED",
+    "SITE_VISIT",
+    "COMPLETE",
+)
+WORK_ORDER_STATE_LABELS = {
+    "CONTACTING_VENDORS": "Contacting Vendors",
+    "AUCTIONING": "Auctioning",
+    "VENDOR ASSIGNED": "Vendor Assigned",
+    "SITE_VISIT": "Site Visit",
+    "COMPLETE": "Order Complete",
+}
+VENDOR_STATES = (
+    "AWAITING_RESPONSE",
+    "NEGOTIATING",
+    "QUOTE_RECEIVED",
+    "SELECTED",
+)
 
 
 def _money(value: str) -> float:
     match = re.search(r"\d[\d,]*(?:\.\d+)?", value)
     return float(match.group().replace(",", "")) if match else 0.0
+
+
+def _progress_state(current: str, proposed: str, states: tuple[str, ...]) -> str:
+    return states[max(states.index(current), states.index(proposed))]
 
 
 def _persist_work_order_vendors(
@@ -186,6 +222,63 @@ async def receive_messages() -> StreamingResponse:
         events(),
         media_type="text/event-stream",
         headers={"Cache-Control": "no-cache"},
+    )
+
+
+@app.post("/api/send-message", response_model=SendMessageResponse)
+async def send_message(
+    request: SendMessageRequest, background_tasks: BackgroundTasks
+) -> SendMessageResponse:
+    vendor = get_vendor(request.vendor_id)
+    work_order = get_work_order(vendor["work_order_id"]) if vendor else None
+    if not vendor or not work_order:
+        raise HTTPException(404, "Work order or vendor not found")
+
+    latest = vendor_messages.get(vendor["vendor_id"])
+    decision = await openai.responses.parse(
+        model=os.getenv("OPENAI_LLM_MODEL", "gpt-4.1-mini"),
+        instructions=STATE_TRANSITION,
+        input=json.dumps(
+            {
+                "work_order": work_order,
+                "vendor": vendor,
+                "latest_conversation": latest.model_dump() if latest else None,
+                "facility_manager_response": request.response,
+            }
+        ),
+        text_format=StateTransition,
+    )
+    if not decision.output_parsed:
+        raise HTTPException(502, "OpenAI returned no state transition")
+
+    updated = update_order_vendor_states(
+        work_order["work_order_id"],
+        vendor["vendor_id"],
+        _progress_state(
+            work_order["state"],
+            decision.output_parsed.work_order_state,
+            WORK_ORDER_STATES,
+        ),
+        _progress_state(
+            vendor["vendor_state"],
+            decision.output_parsed.vendor_state,
+            VENDOR_STATES,
+        ),
+    )
+    if not updated:
+        raise HTTPException(404, "Work order or vendor not found")
+
+    background_tasks.add_task(
+        generate_response,
+        request.response,
+        vendor["vendor_id"],
+        work_order["work_order_id"],
+    )
+    return SendMessageResponse(
+        work_order_id=updated[0]["work_order_id"],
+        work_order_state=WORK_ORDER_STATE_LABELS[updated[0]["state"]],
+        vendor_id=updated[1]["vendor_id"],
+        vendor_state=updated[1]["vendor_state"],
     )
 
 
