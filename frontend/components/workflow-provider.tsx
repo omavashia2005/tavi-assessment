@@ -3,6 +3,7 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from "react"
 import { toast } from "sonner"
 import {
+  SendMessageResponseSchema,
   VendorMessageSchema,
   VendorSearchResponseSchema,
   type VendorMessage,
@@ -121,7 +122,7 @@ export function WorkflowProvider({ children }: { children: React.ReactNode }) {
     const parsed = VendorSearchResponseSchema.parse(await response.json())
     setPlacedOrders((prev) => [
       {
-        id: crypto.randomUUID(),
+        id: parsed.work_order_id || crypto.randomUUID(),
         placedAt: Date.now(),
         workOrder: snapshot,
         vendors: parsed.vendors,
@@ -138,6 +139,20 @@ export function WorkflowProvider({ children }: { children: React.ReactNode }) {
       body: JSON.stringify({ vendorId, response }),
     })
     if (!res.ok) throw new Error(await res.text().catch(() => "Send failed"))
+    const data = SendMessageResponseSchema.parse(await res.json())
+    setPlacedOrders((prev) =>
+      prev.map((o) =>
+        o.id !== data.work_order_id
+          ? o
+          : {
+              ...o,
+              state: data.work_order_state,
+              vendors: o.vendors.map((v) =>
+                v.id !== data.vendor_id ? v : { ...v, vendorState: data.vendor_state },
+              ),
+            },
+      ),
+    )
   }, [])
 
   const value = useMemo<WorkflowContextValue>(
