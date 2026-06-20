@@ -1,7 +1,7 @@
 import re
 from typing import Literal
 
-from pydantic import BaseModel, ConfigDict, field_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 ADDRESS = re.compile(r"^\d+\s+[^,]+,\s+[A-Za-z .'-]+\s+[A-Z]{2}\s+\d{5}(?:-\d{4})?$")
 DATE = re.compile(r"^\d{4}-\d{2}-\d{2}$")
@@ -32,15 +32,17 @@ class WorkOrder(BaseModel):
 
 
 class VendorResult(BaseModel):
-    name: str
-    contactInfo: str
-    reviewScore: str
-    avgCost: str = ""
-    distanceMiles: float
+    name: str = Field(description="Full business name")
+    contactInfo: str = Field(description="Phone, address, and/or website")
+    reviewScore: str = Field(description="BBB rating or brief review summary")
+    avgCost: str = Field(default="", description="Average cost estimate, empty if unavailable")
+    distanceMiles: float = Field(description="Approximate miles from the job site")
 
 
 class VendorSearchResponse(BaseModel):
-    vendors: list[VendorResult]
+    vendors: list[VendorResult] = Field(
+        description="Businesses ranked best to worst by BBB rating and customer reviews"
+    )
 
 
 class ChatTurn(BaseModel):

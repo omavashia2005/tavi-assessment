@@ -26,7 +26,7 @@ from pipecat.services.openai.tts import OpenAITTSService
 from pipecat.transports.base_transport import BaseTransport, TransportParams
 from pipecat.workers.runner import WorkerRunner
 
-from schemas import ChatRequest, ChatResponse, VendorSearchResponse, WorkOrder
+from schemas import ChatRequest, ChatResponse, VendorSearchResponse, WorkOrder  # noqa: F401
 
 load_dotenv()
 openai = AsyncOpenAI()
@@ -104,28 +104,7 @@ async def chat(request: ChatRequest) -> ChatResponse:
 _fc = Firecrawl(api_key=os.environ.get("FIRECRAWL_API_KEY", ""))
 _vendor_cache: dict[str, dict] = {}  # ponytail: in-process cache, cleared on restart
 _vendor_in_flight: dict[str, asyncio.Task] = {}  # dedupe concurrent identical requests
-
-_VENDOR_SCHEMA = {
-    "type": "object",
-    "properties": {
-        "vendors": {
-            "type": "array",
-            "description": "Businesses ranked best to worst by rating and relevance",
-            "items": {
-                "type": "object",
-                "properties": {
-                    "name":         {"type": "string", "description": "Business name"},
-                    "contactInfo":  {"type": "string", "description": "Phone, address, and/or website"},
-                    "reviewScore":  {"type": "string", "description": "BBB rating or review summary"},
-                    "avgCost":      {"type": "string", "description": "Average cost estimate, empty if unavailable"},
-                    "distanceMiles":{"type": "number", "description": "Approximate miles from the job site"},
-                },
-                "required": ["name", "contactInfo", "reviewScore", "distanceMiles"],
-            },
-        }
-    },
-    "required": ["vendors"],
-}
+_VENDOR_SCHEMA = VendorSearchResponse.model_json_schema()
 
 
 async def _run_vendor_search(order: WorkOrder, cache_key: str) -> dict:
