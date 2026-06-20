@@ -67,7 +67,8 @@ Vendor message:
 STATE_TRANSITION = """
 Decide the workflow states after the facility manager sends a message to a vendor.
 Return each current state unchanged unless the message clearly progresses it.
-Never regress a state.
+Never regress a state. If the facility manager and / or the vendor agree to a price, move to the next state. If 
+either party implies that the site visit was finished and a quote was accepted, mark the vendor as selected and work order as completed. 
 
 Work-order progression:
 CONTACTING_VENDORS -> AUCTIONING -> VENDOR ASSIGNED -> SITE_VISIT -> COMPLETE
