@@ -16,11 +16,29 @@ export const WorkOrderSchema = z.object({
 export type WorkOrder = z.infer<typeof WorkOrderSchema>
 export type WorkOrderField = keyof WorkOrder
 
+export const VENDOR_STATES = ["Contacted", "Negotiating", "Quote Received", "Selected"] as const
+export type VendorState = (typeof VENDOR_STATES)[number]
+
+export const WORK_ORDER_STATES = [
+  "Contacting Vendors",
+  "Auctioning",
+  "Vendor Assigned",
+  "Site Visit",
+  "Order Complete",
+] as const
+export type WorkOrderState = (typeof WORK_ORDER_STATES)[number]
+
 export const VendorResultSchema = z.object({
   name: z.string(),
   contactInfo: z.string(),
   reviewScore: z.string(),
   avgCost: z.string().default(""),
+  // ponytail: optional + defaulted so today's backend payload still parses;
+  // backend can start sending these without a frontend change.
+  quote: z.string().default(""),
+  serviceDate: z.string().default(""),
+  serviceTime: z.string().default(""),
+  state: z.enum(VENDOR_STATES).default("Contacted"),
 })
 
 export type VendorResult = z.infer<typeof VendorResultSchema>

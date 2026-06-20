@@ -1,7 +1,12 @@
 "use client"
 
 import { createContext, useCallback, useContext, useEffect, useMemo, useState } from "react"
-import { VendorSearchResponseSchema, type VendorResult, type WorkOrder } from "@/lib/types"
+import {
+  VendorSearchResponseSchema,
+  type VendorResult,
+  type WorkOrder,
+  type WorkOrderState,
+} from "@/lib/types"
 
 const EMPTY_WORK_ORDER: WorkOrder = {
   siteLocation: "",
@@ -18,6 +23,7 @@ export type PlacedOrder = {
   placedAt: number
   workOrder: WorkOrder
   vendors: VendorResult[]
+  state: WorkOrderState
 }
 
 type WorkflowContextValue = {
@@ -43,7 +49,17 @@ export function WorkflowProvider({ children }: { children: React.ReactNode }) {
       const orders = localStorage.getItem("tavi:placedOrders")
       if (orders) {
         const parsed: PlacedOrder[] = JSON.parse(orders)
-        setPlacedOrders(parsed.map((o) => ({ ...o, vendors: o.vendors ?? [] })))
+        setPlacedOrders(parsed.map((o) => ({
+          ...o,
+          vendors: (o.vendors ?? []).map((v) => ({
+            ...v,
+            quote: v.quote ?? "",
+            serviceDate: v.serviceDate ?? "",
+            serviceTime: v.serviceTime ?? "",
+            state: v.state ?? "Contacted",
+          })),
+          state: o.state ?? "Contacting Vendors",
+        })))
       }
     } catch { /* unavailable */ }
     setHydrated(true)
@@ -80,6 +96,7 @@ export function WorkflowProvider({ children }: { children: React.ReactNode }) {
         placedAt: Date.now(),
         workOrder: snapshot,
         vendors: parsed.vendors,
+        state: "Contacting Vendors",
       },
       ...prev,
     ])
