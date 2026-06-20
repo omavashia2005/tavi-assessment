@@ -1,4 +1,4 @@
-from schemas import ChatResponse, WorkOrder
+from schemas import ChatResponse, ReceiveMessageRequest, VendorConversation, WorkOrder
 
 
 def test_work_order_schema() -> None:
@@ -39,6 +39,18 @@ def test_work_order_schema() -> None:
         assistant="What is the service address?",
         workOrder=WorkOrder(),
     ).model_dump()["assistant"] == "What is the service address?"
+    assert ReceiveMessageRequest(
+        vendor_id="vendor-1",
+        work_order_id="order-1",
+        generated_message="I can visit Tuesday.",
+    ).vendor_id == "vendor-1"
+    assert VendorConversation(
+        vendor_response="I can visit Tuesday.",
+        agent_response="Tuesday works.",
+    ).model_dump() == {
+        "vendor_response": "I can visit Tuesday.",
+        "agent_response": "Tuesday works.",
+    }
 
 
 if __name__ == "__main__":

@@ -34,3 +34,27 @@ using empty strings for unknown fields. The outreach message should contain all 
 maximum information about what the job is, where it is, the budget, and when. Keep the outreach message cordial and make sure you're greeting 
 the vendor and keeping your message short, informative, and professionally warm.
 """.strip()
+
+VENDOR_ROLEPLAY = """
+Roleplay as vendor {vendor_id} responding to facility manager outreach below.
+Choose one realistic path: provide a quote, negotiate a requirement, or request a
+site visit. Reply only with the vendor's concise, professional message.
+
+Work order ID: {work_order_id}
+Outreach message:
+{outreach_message}
+""".strip()
+
+VENDOR_REPLY = """
+You are Tavi, representing the facility manager. Write a concise, professional
+reply to the vendor message using the facility requirements in the outreach
+message. Do not invent requirements, prices, or dates.
+
+Work order ID: {work_order_id}
+Vendor ID: {vendor_id}
+Outreach message:
+{outreach_message}
+
+Vendor message:
+{vendor_message}
+""".strip()

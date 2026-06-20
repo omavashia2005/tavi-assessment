@@ -60,3 +60,14 @@ class ChatRequest(BaseModel):
 class ChatResponse(BaseModel):
     assistant: str
     workOrder: WorkOrder
+
+
+class ReceiveMessageRequest(BaseModel):
+    vendor_id: str
+    work_order_id: str
+    generated_message: str
+
+
+class VendorConversation(BaseModel):
+    vendor_response: str
+    agent_response: str
