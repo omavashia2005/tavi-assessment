@@ -13,7 +13,7 @@ from bot import (
     submit_work_order,
     vendor_messages,
 )
-from db import init_db, list_vendors, list_work_orders
+from db import init_db, list_vendors, list_work_orders, update_order_vendor_states
 from schemas import ReceiveMessageRequest, VendorResult, VendorSearchResponse, WorkOrder
 
 
@@ -96,6 +96,25 @@ def test_persist_work_order_vendors() -> None:
     assert persisted_vendors == saved_vendors
 
 
+def test_update_order_vendor_states() -> None:
+    with tempfile.NamedTemporaryFile(suffix=".db") as file:
+        init_db(file.name)
+        work_order, vendors = _persist_work_order_vendors(
+            ORDER, VENDORS[:1], db_path=file.name
+        )
+        updated = update_order_vendor_states(
+            work_order["work_order_id"],
+            vendors[0]["vendor_id"],
+            "AUCTIONING",
+            "NEGOTIATING",
+            db_path=file.name,
+        )
+
+    assert updated
+    assert updated[0]["state"] == "AUCTIONING"
+    assert updated[1]["vendor_state"] == "NEGOTIATING"
+
+
 def test_generate_response_processes_vendor_message() -> None:
     with (
         patch(
@@ -158,5 +177,6 @@ def test_vendor_message_is_available_to_stream() -> None:
 if __name__ == "__main__":
     test_submit_work_order()
     test_persist_work_order_vendors()
+    test_update_order_vendor_states()
     test_generate_response_processes_vendor_message()
     test_vendor_message_is_available_to_stream()

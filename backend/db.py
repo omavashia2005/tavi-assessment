@@ -173,6 +173,38 @@ def update_vendor(
     return get_vendor(vendor_id, db_path=db_path)
 
 
+def update_order_vendor_states(
+    work_order_id: str,
+    vendor_id: str,
+    work_order_state: str,
+    vendor_state: str,
+    *,
+    db_path: str | Path = DB_PATH,
+) -> tuple[dict, dict] | None:
+    with connect(db_path) as connection:
+        belongs = connection.execute(
+            """
+            SELECT 1 FROM vendors
+            WHERE vendor_id = ? AND work_order_id = ?
+            """,
+            (vendor_id, work_order_id),
+        ).fetchone()
+        if not belongs:
+            return None
+        connection.execute(
+            "UPDATE vendors SET vendor_state = ? WHERE vendor_id = ?",
+            (vendor_state, vendor_id),
+        )
+        connection.execute(
+            "UPDATE work_orders SET state = ? WHERE work_order_id = ?",
+            (work_order_state, work_order_id),
+        )
+    return (
+        get_work_order(work_order_id, db_path=db_path),
+        get_vendor(vendor_id, db_path=db_path),
+    )
+
+
 def delete_vendor(vendor_id: str, *, db_path: str | Path = DB_PATH) -> bool:
     with connect(db_path) as connection:
         cursor = connection.execute(
