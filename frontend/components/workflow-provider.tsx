@@ -1,6 +1,7 @@
 "use client"
 
-import { createContext, useCallback, useContext, useEffect, useMemo, useState } from "react"
+import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from "react"
+import { toast } from "sonner"
 import {
   VendorMessageSchema,
   VendorSearchResponseSchema,
@@ -47,6 +48,11 @@ export function WorkflowProvider({ children }: { children: React.ReactNode }) {
   const [vendorMessages, setVendorMessages] = useState<Record<string, VendorMessage>>({})
   const [hydrated, setHydrated] = useState(false)
 
+  // Ref so the SSE handler can look up vendor names from the latest placedOrders
+  // without re-subscribing every time orders change.
+  const placedOrdersRef = useRef<PlacedOrder[]>([])
+  placedOrdersRef.current = placedOrders
+
   // ponytail: native EventSource handles reconnect
   useEffect(() => {
     const es = new EventSource(`${PIPECAT_URL}/api/receive-messages`)
@@ -55,6 +61,10 @@ export function WorkflowProvider({ children }: { children: React.ReactNode }) {
         const parsed = VendorMessageSchema.safeParse(JSON.parse(event.data))
         if (parsed.success) {
           setVendorMessages((prev) => ({ ...prev, [parsed.data.vendor_id]: parsed.data }))
+          const name = placedOrdersRef.current
+            .flatMap((o) => o.vendors)
+            .find((v) => v.id === parsed.data.vendor_id)?.name
+          toast.info(name ? `New response from ${name}` : "New vendor response")
         }
       } catch { /* malformed event */ }
     }
