@@ -2,7 +2,9 @@
 
 import { createContext, useCallback, useContext, useEffect, useMemo, useState } from "react"
 import {
+  VendorMessageSchema,
   VendorSearchResponseSchema,
+  type VendorMessage,
   type VendorResult,
   type WorkOrder,
   type WorkOrderState,
@@ -33,6 +35,8 @@ type WorkflowContextValue = {
   resetWorkflow: () => void
   placedOrders: PlacedOrder[]
   placeOrder: () => Promise<void>
+  vendorMessages: Record<string, VendorMessage>
+  sendMessage: (vendorId: string, response: string) => Promise<void>
 }
 
 const WorkflowContext = createContext<WorkflowContextValue | null>(null)
@@ -40,7 +44,22 @@ const WorkflowContext = createContext<WorkflowContextValue | null>(null)
 export function WorkflowProvider({ children }: { children: React.ReactNode }) {
   const [workOrder, setWorkOrder] = useState<WorkOrder>(EMPTY_WORK_ORDER)
   const [placedOrders, setPlacedOrders] = useState<PlacedOrder[]>([])
+  const [vendorMessages, setVendorMessages] = useState<Record<string, VendorMessage>>({})
   const [hydrated, setHydrated] = useState(false)
+
+  // ponytail: native EventSource handles reconnect
+  useEffect(() => {
+    const es = new EventSource(`${PIPECAT_URL}/api/receive-messages`)
+    es.onmessage = (event) => {
+      try {
+        const parsed = VendorMessageSchema.safeParse(JSON.parse(event.data))
+        if (parsed.success) {
+          setVendorMessages((prev) => ({ ...prev, [parsed.data.vendor_id]: parsed.data }))
+        }
+      } catch { /* malformed event */ }
+    }
+    return () => es.close()
+  }, [])
 
   useEffect(() => {
     try {
@@ -102,9 +121,27 @@ export function WorkflowProvider({ children }: { children: React.ReactNode }) {
     ])
   }, [workOrder])
 
+  const sendMessage = useCallback(async (vendorId: string, response: string) => {
+    const res = await fetch(`${PIPECAT_URL}/api/send-message`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ vendorId, response }),
+    })
+    if (!res.ok) throw new Error(await res.text().catch(() => "Send failed"))
+  }, [])
+
   const value = useMemo<WorkflowContextValue>(
-    () => ({ workOrder, setWorkOrder, updateField, resetWorkflow, placedOrders, placeOrder }),
-    [workOrder, updateField, resetWorkflow, placedOrders, placeOrder],
+    () => ({
+      workOrder,
+      setWorkOrder,
+      updateField,
+      resetWorkflow,
+      placedOrders,
+      placeOrder,
+      vendorMessages,
+      sendMessage,
+    }),
+    [workOrder, updateField, resetWorkflow, placedOrders, placeOrder, vendorMessages, sendMessage],
   )
 
   return <WorkflowContext.Provider value={value}>{children}</WorkflowContext.Provider>

@@ -34,6 +34,7 @@ export const WORK_ORDER_STATES = [
 export type WorkOrderState = (typeof WORK_ORDER_STATES)[number]
 
 export const VendorResultSchema = z.object({
+  id: z.string().default(""),
   name: z.string(),
   contactInfo: z.string(),
   reviewScore: z.string(),
@@ -53,6 +54,14 @@ export const VendorSearchResponseSchema = z.object({
 })
 
 export type VendorSearchResponse = z.infer<typeof VendorSearchResponseSchema>
+
+export const VendorMessageSchema = z.object({
+  vendor_id: z.string(),
+  vendor_response: z.string(),
+  agent_response: z.string(),
+})
+
+export type VendorMessage = z.infer<typeof VendorMessageSchema>
 
 export const AgentStatusSchema = z.enum([
   "idle",
