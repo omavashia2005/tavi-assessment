@@ -47,7 +47,7 @@ erDiagram
     TEXT vendor_state
   }
   work_orders ||--o{ vendors : "has"
-  work_orders }o--o| vendors : "selected"
+  work_orders |o--o| vendors : "selected vendor"
 ```
 
 ## Architecture
