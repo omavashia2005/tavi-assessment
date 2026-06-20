@@ -8,10 +8,9 @@ import { Badge } from "@/components/ui/badge"
 
 const STEPS = [
   { href: "/", label: "Intake", step: 1 },
-  { href: "/review", label: "Review", step: 2 },
-  { href: "/discovery", label: "Discovery", step: 3 },
-  { href: "/vendors", label: "Vendors", step: 4 },
-  { href: "/launch", label: "Launch", step: 5 },
+  { href: "/discovery", label: "Discovery", step: 2 },
+  { href: "/vendors", label: "Vendors", step: 3 },
+  { href: "/launch", label: "Launch", step: 4 },
 ] as const
 
 function TaviMark() {

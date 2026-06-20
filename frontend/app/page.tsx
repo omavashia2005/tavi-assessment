@@ -230,13 +230,13 @@ export default function IntakePage() {
               Restart
             </Button>
             {turns.length > 0 || Object.values(workOrder).some(Boolean) ? (
-              <Button nativeButton={false} render={<Link href="/review" />}>
-                Review work order
+              <Button nativeButton={false} render={<Link href="/discovery" />}>
+                Discover vendors
                 <ArrowRight data-icon="inline-end" />
               </Button>
             ) : (
               <Button disabled>
-                Review work order
+                Discover vendors
                 <ArrowRight data-icon="inline-end" />
               </Button>
             )}
