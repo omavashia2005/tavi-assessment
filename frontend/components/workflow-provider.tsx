@@ -56,7 +56,7 @@ export function WorkflowProvider({ children }: { children: React.ReactNode }) {
             quote: v.quote ?? "",
             serviceDate: v.serviceDate ?? "",
             serviceTime: v.serviceTime ?? "",
-            state: v.state ?? "Contacted",
+            vendorState: v.vendorState ?? "AWAITING_RESPONSE",
           })),
           state: o.state ?? "Contacting Vendors",
         })))

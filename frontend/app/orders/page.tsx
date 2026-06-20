@@ -53,11 +53,14 @@ const WORK_ORDER_STATE_STYLES: Record<WorkOrderState, string> = {
 }
 
 const VENDOR_STATE_STYLES: Record<VendorState, string> = {
-  Contacted: "bg-blue-500/15 text-blue-700 ring-blue-500/30 dark:text-blue-300",
-  Negotiating: "bg-amber-500/15 text-amber-700 ring-amber-500/30 dark:text-amber-300",
-  "Quote Received": "bg-violet-500/15 text-violet-700 ring-violet-500/30 dark:text-violet-300",
-  Selected: "bg-emerald-500/15 text-emerald-700 ring-emerald-500/30 dark:text-emerald-300",
+  AWAITING_RESPONSE: "bg-blue-500/15 text-blue-700 ring-blue-500/30 dark:text-blue-300",
+  NEGOTIATING: "bg-amber-500/15 text-amber-700 ring-amber-500/30 dark:text-amber-300",
+  QUOTE_RECEIVED: "bg-violet-500/15 text-violet-700 ring-violet-500/30 dark:text-violet-300",
+  SELECTED: "bg-emerald-500/15 text-emerald-700 ring-emerald-500/30 dark:text-emerald-300",
 }
+
+const formatVendorState = (s: VendorState) =>
+  s.toLowerCase().split("_").map((w) => w[0].toUpperCase() + w.slice(1)).join(" ")
 
 export default function OrdersPage() {
   const { placedOrders } = useWorkflow()
@@ -282,7 +285,7 @@ function VendorCard({
   vendor: VendorResult
   onOpen: () => void
 }) {
-  const isWinning = vendor.state === "Selected"
+  const isWinning = vendor.vendorState === "SELECTED"
   return (
     <button
       type="button"
@@ -305,10 +308,10 @@ function VendorCard({
         <span
           className={cn(
             "inline-flex shrink-0 items-center rounded-full px-2 py-0.5 text-[11px] font-medium ring-1",
-            VENDOR_STATE_STYLES[vendor.state],
+            VENDOR_STATE_STYLES[vendor.vendorState],
           )}
         >
-          {vendor.state}
+          {formatVendorState(vendor.vendorState)}
         </span>
       </div>
 
@@ -325,7 +328,7 @@ function VendorCard({
         <DetailItem icon={<Clock className="size-3" />} label="Time" value={vendor.serviceTime || "—"} />
       </dl>
 
-      <Timeline current={vendor.state} compact />
+      <Timeline current={vendor.vendorState} compact />
     </button>
   )
 }
@@ -378,10 +381,10 @@ function VendorModal({
               <span
                 className={cn(
                   "inline-flex w-fit items-center rounded-full px-2 py-0.5 text-[11px] font-medium ring-1",
-                  VENDOR_STATE_STYLES[vendor.state],
+                  VENDOR_STATE_STYLES[vendor.vendorState],
                 )}
               >
-                {vendor.state}
+                {formatVendorState(vendor.vendorState)}
               </span>
               <h2 id="vendor-modal-title" className="text-2xl font-semibold tracking-tight">
                 {vendor.name}
@@ -427,7 +430,7 @@ function VendorModal({
             <span className="text-xs font-medium uppercase tracking-wider text-muted-foreground">
               Vendor progress
             </span>
-            <Timeline current={vendor.state} />
+            <Timeline current={vendor.vendorState} />
           </div>
         </CardContent>
       </Card>
@@ -438,48 +441,41 @@ function VendorModal({
 function Timeline({ current, compact = false }: { current: VendorState; compact?: boolean }) {
   const currentIndex = VENDOR_STATES.indexOf(current)
   return (
-    <ol className={cn("flex items-start gap-2", compact ? "pt-3" : "pt-1")}>
+    <ol
+      className={cn("flex items-center gap-1.5", compact ? "pt-3" : "pt-1")}
+      aria-label={`Vendor progress: ${formatVendorState(current)}`}
+    >
       {VENDOR_STATES.map((s, i) => {
         const isDone = i < currentIndex
         const isActive = i === currentIndex
         return (
-          <li key={s} className="flex flex-1 flex-col items-center gap-1.5">
-            <div className="flex w-full items-center gap-1.5">
-              <span
-                className={cn(
-                  "flex shrink-0 items-center justify-center rounded-full border-2 transition-colors",
-                  compact ? "size-5" : "size-7",
-                  isDone && "border-primary bg-primary text-primary-foreground",
-                  isActive && "border-primary bg-primary text-primary-foreground",
-                  !isDone && !isActive && "border-border bg-card text-muted-foreground",
-                )}
-              >
-                {isDone ? (
-                  <Check className={compact ? "size-2.5" : "size-3.5"} />
-                ) : (
-                  <span className={cn("font-semibold", compact ? "text-[9px]" : "text-xs")}>
-                    {i + 1}
-                  </span>
-                )}
-              </span>
-              {i < VENDOR_STATES.length - 1 ? (
-                <span
-                  className={cn(
-                    "h-px flex-1 transition-colors",
-                    i < currentIndex ? "bg-primary" : "bg-border",
-                  )}
-                />
-              ) : null}
-            </div>
+          <li key={s} className="flex flex-1 items-center gap-1.5">
             <span
               className={cn(
-                "text-center leading-tight",
-                compact ? "text-[9px]" : "text-[11px]",
-                isActive ? "font-semibold text-foreground" : "text-muted-foreground",
+                "flex shrink-0 items-center justify-center rounded-full border-2 transition-colors",
+                compact ? "size-5" : "size-7",
+                (isDone || isActive) && "border-primary bg-primary text-primary-foreground",
+                !isDone && !isActive && "border-border bg-card text-muted-foreground",
               )}
+              aria-label={formatVendorState(s)}
+              title={formatVendorState(s)}
             >
-              {s}
+              {isDone ? (
+                <Check className={compact ? "size-2.5" : "size-3.5"} />
+              ) : (
+                <span className={cn("font-semibold", compact ? "text-[9px]" : "text-xs")}>
+                  {i + 1}
+                </span>
+              )}
             </span>
+            {i < VENDOR_STATES.length - 1 ? (
+              <span
+                className={cn(
+                  "h-px flex-1 transition-colors",
+                  i < currentIndex ? "bg-primary" : "bg-border",
+                )}
+              />
+            ) : null}
           </li>
         )
       })}

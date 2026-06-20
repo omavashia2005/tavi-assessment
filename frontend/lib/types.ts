@@ -16,7 +16,12 @@ export const WorkOrderSchema = z.object({
 export type WorkOrder = z.infer<typeof WorkOrderSchema>
 export type WorkOrderField = keyof WorkOrder
 
-export const VENDOR_STATES = ["Contacted", "Negotiating", "Quote Received", "Selected"] as const
+export const VENDOR_STATES = [
+  "AWAITING_RESPONSE",
+  "NEGOTIATING",
+  "QUOTE_RECEIVED",
+  "SELECTED",
+] as const
 export type VendorState = (typeof VENDOR_STATES)[number]
 
 export const WORK_ORDER_STATES = [
@@ -38,7 +43,7 @@ export const VendorResultSchema = z.object({
   quote: z.string().default(""),
   serviceDate: z.string().default(""),
   serviceTime: z.string().default(""),
-  state: z.enum(VENDOR_STATES).default("Contacted"),
+  vendorState: z.enum(VENDOR_STATES).default("AWAITING_RESPONSE"),
 })
 
 export type VendorResult = z.infer<typeof VendorResultSchema>
