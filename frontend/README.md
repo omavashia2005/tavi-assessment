@@ -16,10 +16,10 @@ graph TD
   ES -- vendor messages --> WP
 
   IntakePage[Intake /] -- voice --> PC
-  IntakePage -- text chat --> ChatAPI[POST /api/chat]
-  IntakePage -- place order --> WorkOrderAPI[POST /api/work-order]
+  IntakePage -- text chat --> ChatAPI["POST /api/chat"]
+  IntakePage -- place order --> WorkOrderAPI["POST /api/work-order"]
 
-  OrdersPage[Orders /orders] -- send message --> SendAPI[POST /api/send-message]
+  OrdersPage["Orders /orders"] -- send message --> SendAPI["POST /api/send-message"]
 
   WP --> IntakePage
   WP --> OrdersPage
@@ -32,12 +32,12 @@ graph TD
 flowchart LR
   A([User opens /]) --> B{mode?}
   B -- voice --> C[PipecatClient WebRTC]
-  B -- text --> D[POST /api/chat]
+  B -- text --> D["POST /api/chat"]
   C --> E[LLM fills work order]
   D --> E
   E --> F{all fields filled?}
-  F -- yes --> G[POST /api/work-order]
-  G --> H[/orders with vendor cards]
+  F -- yes --> G["POST /api/work-order"]
+  G --> H["/orders with vendor cards"]
 ```
 
 ## Getting Started
