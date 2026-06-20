@@ -40,14 +40,6 @@ import {
 } from "@/lib/types"
 import type { PlacedOrder } from "@/components/workflow-provider"
 
-const DATE_TIME_FORMATTER = new Intl.DateTimeFormat("en-US", {
-  month: "short",
-  day: "numeric",
-  year: "numeric",
-  hour: "numeric",
-  minute: "2-digit",
-})
-
 export default function OrdersPage() {
   const { placedOrders } = useWorkflow()
   const [site, setSite] = useState<string>("")
@@ -202,27 +194,6 @@ function OrderDetail({ order }: { order: PlacedOrder }) {
 
   return (
     <section className="flex flex-col gap-6">
-      <Card className="overflow-hidden">
-        <CardContent className="flex flex-col gap-2 py-5">
-          <div className="flex items-center gap-2 text-xs text-muted-foreground">
-            <span className="tabular-nums">
-              Placed {DATE_TIME_FORMATTER.format(order.placedAt)}
-            </span>
-            <span aria-hidden="true">·</span>
-            <span>
-              {order.vendors.length} vendor{order.vendors.length === 1 ? "" : "s"} competing
-            </span>
-          </div>
-          <h2 className="text-xl font-semibold tracking-tight">
-            {order.workOrder.serviceType || "Untitled service"}
-          </h2>
-          <div className="flex items-center gap-1.5 text-sm text-muted-foreground">
-            <MapPin className="size-3.5" aria-hidden="true" />
-            {order.workOrder.siteLocation || "—"}
-          </div>
-        </CardContent>
-      </Card>
-
       <WorkOrderTimeline current={order.state} />
 
       {order.vendors.length === 0 ? (
