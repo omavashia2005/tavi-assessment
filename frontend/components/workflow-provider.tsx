@@ -13,10 +13,19 @@ const EMPTY_WORK_ORDER: WorkOrder = {
 
 const PIPECAT_URL = process.env.NEXT_PUBLIC_PIPECAT_URL ?? "http://localhost:7860"
 
+export type VendorResult = {
+  name: string
+  contactInfo: string
+  reviewScore: string
+  avgCost: string
+  distanceMiles: number
+}
+
 export type PlacedOrder = {
   id: string
   placedAt: number
   workOrder: WorkOrder
+  vendors: VendorResult[]
 }
 
 type WorkflowContextValue = {
@@ -69,8 +78,14 @@ export function WorkflowProvider({ children }: { children: React.ReactNode }) {
       body: JSON.stringify(snapshot),
     })
     if (!response.ok) throw new Error(await response.text().catch(() => "Place order failed"))
+    const data = await response.json() as { vendors?: VendorResult[] }
     setPlacedOrders((prev) => [
-      { id: crypto.randomUUID(), placedAt: Date.now(), workOrder: snapshot },
+      {
+        id: crypto.randomUUID(),
+        placedAt: Date.now(),
+        workOrder: snapshot,
+        vendors: data.vendors ?? [],
+      },
       ...prev,
     ])
   }, [workOrder])
