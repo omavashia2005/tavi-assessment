@@ -49,7 +49,10 @@ export function WorkflowProvider({ children }: { children: React.ReactNode }) {
       const wo = localStorage.getItem("tavi:workOrder")
       if (wo) setWorkOrder({ ...EMPTY_WORK_ORDER, ...JSON.parse(wo) })
       const orders = localStorage.getItem("tavi:placedOrders")
-      if (orders) setPlacedOrders(JSON.parse(orders))
+      if (orders) {
+        const parsed: PlacedOrder[] = JSON.parse(orders)
+        setPlacedOrders(parsed.map((o) => ({ ...o, vendors: o.vendors ?? [] })))
+      }
     } catch { /* unavailable */ }
     setHydrated(true)
   }, [])
