@@ -229,17 +229,21 @@ export default function IntakePage() {
               <RotateCcw data-icon="inline-start" />
               Restart
             </Button>
-            {turns.length > 0 || Object.values(workOrder).some(Boolean) ? (
-              <Button nativeButton={false} render={<Link href="/discovery" />}>
-                Discover vendors
-                <ArrowRight data-icon="inline-end" />
-              </Button>
-            ) : (
-              <Button disabled>
-                Discover vendors
-                <ArrowRight data-icon="inline-end" />
-              </Button>
-            )}
+            {(() => {
+              const complete = (["siteLocation", "serviceType", "budget", "requiredServiceDate"] as const)
+                .every((f) => workOrder[f].trim().length > 0)
+              return complete ? (
+                <Button nativeButton={false} render={<Link href="/discovery" />}>
+                  Discover vendors
+                  <ArrowRight data-icon="inline-end" />
+                </Button>
+              ) : (
+                <Button disabled title="Complete the work order to continue">
+                  Discover vendors
+                  <ArrowRight data-icon="inline-end" />
+                </Button>
+              )
+            })()}
           </CardFooter>
         </Card>
 
