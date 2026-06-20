@@ -8,8 +8,10 @@ from fastapi import BackgroundTasks
 from bot import (
     _persist_work_order_vendors,
     generate_response,
-    receive_message,
+    process_vendor_message,
+    receive_messages,
     submit_work_order,
+    vendor_messages,
 )
 from db import init_db, list_vendors, list_work_orders
 from schemas import ReceiveMessageRequest, VendorResult, VendorSearchResponse, WorkOrder
@@ -54,7 +56,7 @@ def test_submit_work_order() -> None:
     assert [vendor.vendorState for vendor in response.vendors] == [
         "AWAITING_RESPONSE"
     ] * 5
-    assert [vendor.vendorId for vendor in response.vendors] == [
+    assert [vendor.id for vendor in response.vendors] == [
         f"vendor-{index}" for index in range(5)
     ]
     assert len(background_tasks.tasks) == 1
@@ -93,29 +95,34 @@ def test_persist_work_order_vendors() -> None:
     assert persisted_vendors == saved_vendors
 
 
-def test_generate_response_gets_receive_message() -> None:
+def test_generate_response_processes_vendor_message() -> None:
     with (
         patch(
             "bot.openai.responses.create",
             return_value=SimpleNamespace(output_text="We can quote $8,500."),
         ) as create,
-        patch("bot._get_json", return_value={}) as get,
-        patch.dict("os.environ", {"INTERNAL_API_URL": "http://backend.test"}),
+        patch("bot.process_vendor_message") as process,
     ):
         asyncio.run(generate_response("Please quote the job.", "vendor-1", "order-1"))
 
     create.assert_awaited_once()
-    get.assert_called_once_with(
-        "http://backend.test/api/receive-messages",
-        {
-            "vendor_id": "vendor-1",
-            "work_order_id": "order-1",
-            "generated_message": "We can quote $8,500.",
-        },
+    process.assert_awaited_once_with(
+        ReceiveMessageRequest(
+            vendor_id="vendor-1",
+            work_order_id="order-1",
+            generated_message="We can quote $8,500.",
+        )
     )
 
 
-def test_receive_message_posts_conversation_to_frontend() -> None:
+def test_vendor_message_is_available_to_stream() -> None:
+    async def first_event() -> tuple[object, str]:
+        stream = await receive_messages()
+        event = await anext(stream.body_iterator)
+        await stream.body_iterator.aclose()
+        return stream, event
+
+    vendor_messages.clear()
     request = ReceiveMessageRequest(
         vendor_id="vendor-1",
         work_order_id="order-1",
@@ -135,28 +142,20 @@ def test_receive_message_posts_conversation_to_frontend() -> None:
             "bot.openai.responses.create",
             return_value=SimpleNamespace(output_text="Can you complete it by June 29?"),
         ) as create,
-        patch("bot._post_json", return_value={}) as post,
-        patch.dict(
-            "os.environ",
-            {"FRONTEND_RECEIVE_MESSAGE_URL": "http://frontend.test/api/messages"},
-        ),
     ):
-        response = asyncio.run(receive_message(request))
+        response = asyncio.run(process_vendor_message(request))
+        stream, event = asyncio.run(first_event())
 
     create.assert_awaited_once()
     assert response.vendor_id == "vendor-1"
-    post.assert_called_once_with(
-        "http://frontend.test/api/messages",
-        {
-            "vendor_id": "vendor-1",
-            "vendor_response": "We can quote $8,500.",
-            "agent_response": "Can you complete it by June 29?",
-        },
-    )
+    assert vendor_messages["vendor-1"] == response
+    assert stream.media_type == "text/event-stream"
+    assert '"vendor_id":"vendor-1"' in event
+    vendor_messages.clear()
 
 
 if __name__ == "__main__":
     test_submit_work_order()
     test_persist_work_order_vendors()
-    test_generate_response_gets_receive_message()
-    test_receive_message_posts_conversation_to_frontend()
+    test_generate_response_processes_vendor_message()
+    test_vendor_message_is_available_to_stream()

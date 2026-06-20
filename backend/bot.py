@@ -1,15 +1,13 @@
 import asyncio
-import json
 import os
 import random
 import re
 import urllib.parse
-import urllib.request
-from typing import Annotated, cast
+from typing import cast
 
 from db import DB_PATH, create_vendor, create_work_order, get_vendor, get_work_order
 from dotenv import load_dotenv
-from fastapi import BackgroundTasks, HTTPException, Query
+from fastapi import BackgroundTasks, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from firecrawl import Firecrawl
 from geopy.geocoders import Nominatim
@@ -33,6 +31,8 @@ from pipecat.services.openai.stt import OpenAIRealtimeSTTService
 from pipecat.services.openai.tts import OpenAITTSService
 from pipecat.transports.base_transport import BaseTransport, TransportParams
 from pipecat.workers.runner import WorkerRunner
+from starlette.responses import StreamingResponse
+
 from schemas import (
     ChatRequest,
     ChatResponse,
@@ -69,6 +69,9 @@ transport_params = {
         audio_out_enabled=True,
     ),
 }
+# ponytail: process-local stream is enough for one server; use DB/pubsub for multiple workers.
+vendor_messages: dict[str, VendorConversation] = {}
+message_subscribers: set[asyncio.Queue[VendorConversation]] = set()
 
 
 def _money(value: str) -> float:
@@ -102,26 +105,6 @@ def _persist_work_order_vendors(
     return work_order, saved_vendors
 
 
-def _post_json(url: str, payload: dict) -> dict:
-    request = urllib.request.Request(
-        url,
-        data=json.dumps(payload).encode(),
-        headers={"Content-Type": "application/json"},
-        method="POST",
-    )
-    with urllib.request.urlopen(request, timeout=15) as response:
-        body = response.read()
-    return json.loads(body) if body else {}
-
-
-def _get_json(url: str, params: dict) -> dict:
-    with urllib.request.urlopen(
-        f"{url}?{urllib.parse.urlencode(params)}", timeout=15
-    ) as response:
-        body = response.read()
-    return json.loads(body) if body else {}
-
-
 async def generate_response(
     outreach_message: str, vendor_id: str, work_order_id: str
 ) -> None:
@@ -135,20 +118,17 @@ async def generate_response(
     )
     if not response.output_text:
         raise RuntimeError("OpenAI returned no vendor response")
-    await asyncio.to_thread(
-        _get_json,
-        f"{os.getenv('INTERNAL_API_URL', 'http://127.0.0.1:7860').rstrip('/')}/api/receive-messages",
-        {
-            "vendor_id": vendor_id,
-            "work_order_id": work_order_id,
-            "generated_message": response.output_text,
-        },
+    await process_vendor_message(
+        ReceiveMessageRequest(
+            vendor_id=vendor_id,
+            work_order_id=work_order_id,
+            generated_message=response.output_text,
+        )
     )
 
 
-@app.get("/api/receive-messages", response_model=VendorConversation)
-async def receive_message(
-    request: Annotated[ReceiveMessageRequest, Query()],
+async def process_vendor_message(
+    request: ReceiveMessageRequest,
 ) -> VendorConversation:
     work_order = get_work_order(request.work_order_id)
     vendor = get_vendor(request.vendor_id)
@@ -172,15 +152,35 @@ async def receive_message(
         vendor_response=request.generated_message,
         agent_response=response.output_text,
     )
-    await asyncio.to_thread(
-        _post_json,
-        os.getenv(
-            "FRONTEND_RECEIVE_MESSAGE_URL",
-            f"{os.getenv('FRONTEND_ORIGIN', 'http://localhost:3000').rstrip('/')}/api/receive-message",
-        ),
-        conversation.model_dump(),
-    )
+    vendor_messages[conversation.vendor_id] = conversation
+    for subscriber in message_subscribers.copy():
+        subscriber.put_nowait(conversation)
     return conversation
+
+
+@app.get("/api/receive-messages")
+async def receive_messages() -> StreamingResponse:
+    queue: asyncio.Queue[VendorConversation] = asyncio.Queue()
+
+    async def events():
+        message_subscribers.add(queue)
+        try:
+            for message in vendor_messages.values():
+                yield f"data: {message.model_dump_json()}\n\n"
+            while True:
+                try:
+                    message = await asyncio.wait_for(queue.get(), timeout=15)
+                    yield f"data: {message.model_dump_json()}\n\n"
+                except TimeoutError:
+                    yield ": keepalive\n\n"
+        finally:
+            message_subscribers.discard(queue)
+
+    return StreamingResponse(
+        events(),
+        media_type="text/event-stream",
+        headers={"Cache-Control": "no-cache"},
+    )
 
 
 @app.post("/api/chat", response_model=ChatResponse)
@@ -288,7 +288,7 @@ async def submit_work_order(
     work_order, vendors = _persist_work_order_vendors(order, selected_vendors)
     response = VendorSearchResponse(
         vendors=[
-            vendor.model_copy(update={"vendorId": saved["vendor_id"]})
+            vendor.model_copy(update={"id": saved["vendor_id"]})
             for vendor, saved in zip(selected_vendors, vendors, strict=True)
         ]
     )

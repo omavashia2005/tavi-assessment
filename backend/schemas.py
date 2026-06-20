@@ -32,7 +32,7 @@ class WorkOrder(BaseModel):
 
 
 class VendorResult(BaseModel):
-    vendorId: str = ""
+    id: str = ""
     name: str = Field(description="Full business name")
     contactInfo: str = Field(description="Phone number")
     reviewScore: str = Field(description="BBB rating or brief review summary")
