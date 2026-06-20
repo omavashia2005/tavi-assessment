@@ -10,11 +10,19 @@ from bot import (
     generate_response,
     process_vendor_message,
     receive_messages,
+    send_message,
     submit_work_order,
     vendor_messages,
 )
 from db import init_db, list_vendors, list_work_orders, update_order_vendor_states
-from schemas import ReceiveMessageRequest, VendorResult, VendorSearchResponse, WorkOrder
+from schemas import (
+    ReceiveMessageRequest,
+    SendMessageRequest,
+    StateTransition,
+    VendorResult,
+    VendorSearchResponse,
+    WorkOrder,
+)
 
 
 ORDER = WorkOrder(
@@ -187,9 +195,67 @@ def test_vendor_message_is_available_to_stream() -> None:
     vendor_messages.clear()
 
 
+def test_send_message_updates_states_and_continues_conversation() -> None:
+    background_tasks = BackgroundTasks()
+    with (
+        patch(
+            "bot.get_vendor",
+            return_value={
+                "vendor_id": "vendor-1",
+                "work_order_id": "order-1",
+                "vendor_state": "AWAITING_RESPONSE",
+            },
+        ),
+        patch(
+            "bot.get_work_order",
+            return_value={"work_order_id": "order-1", "state": "AUCTIONING"},
+        ),
+        patch(
+            "bot.openai.responses.parse",
+            return_value=SimpleNamespace(
+                output_parsed=StateTransition(
+                    work_order_state="CONTACTING_VENDORS",
+                    vendor_state="NEGOTIATING",
+                )
+            ),
+        ) as parse,
+        patch(
+            "bot.update_order_vendor_states",
+            return_value=(
+                {"work_order_id": "order-1", "state": "AUCTIONING"},
+                {"vendor_id": "vendor-1", "vendor_state": "NEGOTIATING"},
+            ),
+        ) as update,
+    ):
+        response = asyncio.run(
+            send_message(
+                SendMessageRequest(vendorId="vendor-1", response="Can you do $8,000?"),
+                background_tasks,
+            )
+        )
+
+    parse.assert_awaited_once()
+    assert "Can you do $8,000?" in parse.call_args.kwargs["input"]
+    update.assert_called_once_with(
+        "order-1", "vendor-1", "AUCTIONING", "NEGOTIATING"
+    )
+    assert response.model_dump() == {
+        "work_order_state": "Auctioning",
+        "vendor_state": "NEGOTIATING",
+        "work_order_id": "order-1",
+        "vendor_id": "vendor-1",
+    }
+    assert background_tasks.tasks[0].args == (
+        "Can you do $8,000?",
+        "vendor-1",
+        "order-1",
+    )
+
+
 if __name__ == "__main__":
     test_submit_work_order()
     test_persist_work_order_vendors()
     test_update_order_vendor_states()
     test_generate_response_processes_vendor_message()
     test_vendor_message_is_available_to_stream()
+    test_send_message_updates_states_and_continues_conversation()
