@@ -73,10 +73,21 @@ class ReceiveMessageRequest(BaseModel):
     generated_message: str
 
 
-class VendorConversation(BaseModel):
+class VendorReply(BaseModel):
+    agent_response: str
+    quote: str = Field(description="Quoted price, or empty if none was stated")
+    service_date: str = Field(description="Proposed service date, or empty if unknown")
+    service_time: str = Field(description="Proposed service time, or empty if unknown")
+    contact_info: str = Field(description="New contact information, or empty if none")
+    vendor_state: Literal[
+        "AWAITING_RESPONSE", "NEGOTIATING", "QUOTE_RECEIVED", "SELECTED"
+    ]
+
+
+class VendorConversation(VendorReply):
+    work_order_id: str
     vendor_id: str
     vendor_response: str
-    agent_response: str
 
 
 class SendMessageRequest(BaseModel):

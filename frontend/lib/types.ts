@@ -76,9 +76,15 @@ export const SendMessageResponseSchema = z.object({
 export type SendMessageResponse = z.infer<typeof SendMessageResponseSchema>
 
 export const VendorMessageSchema = z.object({
+  work_order_id: z.string(),
   vendor_id: z.string(),
   vendor_response: z.string(),
   agent_response: z.string(),
+  quote: z.string(),
+  service_date: z.string(),
+  service_time: z.string(),
+  contact_info: z.string(),
+  vendor_state: z.enum(VENDOR_STATES),
 })
 
 export type VendorMessage = z.infer<typeof VendorMessageSchema>

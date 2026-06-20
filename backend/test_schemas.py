@@ -4,6 +4,7 @@ from schemas import (
     SendMessageRequest,
     SendMessageResponse,
     VendorConversation,
+    VendorReply,
     WorkOrder,
     WorkOrderResponse,
 )
@@ -53,14 +54,34 @@ def test_work_order_schema() -> None:
         generated_message="I can visit Tuesday.",
     ).vendor_id == "vendor-1"
     assert VendorConversation(
+        work_order_id="order-1",
         vendor_id="vendor-1",
         vendor_response="I can visit Tuesday.",
         agent_response="Tuesday works.",
+        quote="",
+        service_date="Tuesday",
+        service_time="",
+        contact_info="",
+        vendor_state="NEGOTIATING",
     ).model_dump() == {
+        "agent_response": "Tuesday works.",
+        "quote": "",
+        "service_date": "Tuesday",
+        "service_time": "",
+        "contact_info": "",
+        "vendor_state": "NEGOTIATING",
+        "work_order_id": "order-1",
         "vendor_id": "vendor-1",
         "vendor_response": "I can visit Tuesday.",
-        "agent_response": "Tuesday works.",
     }
+    assert VendorReply(
+        agent_response="Thanks.",
+        quote="$8,500",
+        service_date="2026-06-29",
+        service_time="9:00 AM",
+        contact_info="",
+        vendor_state="QUOTE_RECEIVED",
+    ).quote == "$8,500"
     assert SendMessageRequest(vendorId="vendor-1", response="Approved.").vendor_id == (
         "vendor-1"
     )
