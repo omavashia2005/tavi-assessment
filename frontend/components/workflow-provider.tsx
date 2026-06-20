@@ -62,10 +62,32 @@ export function WorkflowProvider({ children }: { children: React.ReactNode }) {
       try {
         const parsed = VendorMessageSchema.safeParse(JSON.parse(event.data))
         if (parsed.success) {
-          setVendorMessages((prev) => ({ ...prev, [parsed.data.vendor_id]: parsed.data }))
+          const message = parsed.data
+          setVendorMessages((prev) => ({ ...prev, [message.vendor_id]: message }))
+          setPlacedOrders((prev) =>
+            prev.map((order) =>
+              order.id !== message.work_order_id
+                ? order
+                : {
+                    ...order,
+                    vendors: order.vendors.map((vendor) =>
+                      vendor.id !== message.vendor_id
+                        ? vendor
+                        : {
+                            ...vendor,
+                            quote: message.quote || vendor.quote,
+                            serviceDate: message.service_date || vendor.serviceDate,
+                            serviceTime: message.service_time || vendor.serviceTime,
+                            contactInfo: message.contact_info || vendor.contactInfo,
+                            vendorState: message.vendor_state,
+                          },
+                    ),
+                  },
+            ),
+          )
           const name = placedOrdersRef.current
             .flatMap((o) => o.vendors)
-            .find((v) => v.id === parsed.data.vendor_id)?.name
+            .find((v) => v.id === message.vendor_id)?.name
           toast.info(name ? `New response from ${name}` : "New vendor response")
         }
       } catch { /* malformed event */ }
