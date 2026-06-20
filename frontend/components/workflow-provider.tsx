@@ -39,20 +39,25 @@ function cacheKey(wo: WorkOrder) {
 }
 
 export function WorkflowProvider({ children }: { children: React.ReactNode }) {
-  const [workOrder, setWorkOrder] = useState<WorkOrder>(() => {
-    try {
-      const saved = sessionStorage.getItem("tavi:workOrder")
-      if (saved) return { ...EMPTY_WORK_ORDER, ...JSON.parse(saved) }
-    } catch { /* SSR or quota */ }
-    return EMPTY_WORK_ORDER
-  })
+  const [workOrder, setWorkOrder] = useState<WorkOrder>(EMPTY_WORK_ORDER)
   const [selectedVendorIds, setSelectedVendorIds] = useState<string[]>([])
   const [vendorSearch, setVendorSearch] = useState<VendorSearch>({ status: "idle" })
+  const [hydrated, setHydrated] = useState(false)
 
-  // Persist work order on every change
+  // Hydrate from sessionStorage AFTER first paint — keeps SSR markup matching client
   useEffect(() => {
+    try {
+      const saved = sessionStorage.getItem("tavi:workOrder")
+      if (saved) setWorkOrder({ ...EMPTY_WORK_ORDER, ...JSON.parse(saved) })
+    } catch { /* unavailable */ }
+    setHydrated(true)
+  }, [])
+
+  // Persist work order on every change, but only once hydrated (avoid overwriting w/ empty)
+  useEffect(() => {
+    if (!hydrated) return
     try { sessionStorage.setItem("tavi:workOrder", JSON.stringify(workOrder)) } catch { /* quota */ }
-  }, [workOrder])
+  }, [workOrder, hydrated])
 
   const updateField = useCallback((field: keyof WorkOrder, value: string) => {
     setWorkOrder((prev) => ({ ...prev, [field]: value }))
@@ -132,6 +137,7 @@ export function WorkflowProvider({ children }: { children: React.ReactNode }) {
   // Hydrate vendor search from sessionStorage on mount (and re-hydrate if cacheKey changes)
   const key = cacheKey(workOrder)
   useEffect(() => {
+    if (!hydrated) return
     if (!workOrder.siteLocation || !workOrder.serviceType) {
       setVendorSearch({ status: "idle" })
       return
@@ -151,7 +157,7 @@ export function WorkflowProvider({ children }: { children: React.ReactNode }) {
       }
       setVendorSearch({ status: "idle" })
     } catch { /* unavailable */ }
-  }, [key]) // eslint-disable-line react-hooks/exhaustive-deps
+  }, [key, hydrated]) // eslint-disable-line react-hooks/exhaustive-deps
 
   const resetWorkflow = useCallback(() => {
     setWorkOrder(EMPTY_WORK_ORDER)

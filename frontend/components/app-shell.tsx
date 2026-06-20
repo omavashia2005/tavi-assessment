@@ -55,8 +55,13 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   const { workOrder, selectedVendorIds, vendorSearch } = useWorkflow()
   const activeStep = currentStepFor(pathname)
 
+  // Defer client-only state reads until after hydration to avoid SSR mismatch
+  const [mounted, setMounted] = useState(false)
+  useEffect(() => { setMounted(true) }, [])
+
   function isUnlocked(step: number) {
     if (step <= 1) return true
+    if (!mounted) return false // SSR + first paint: assume locked
     if (step === 2) return workOrderComplete(workOrder)
     if (step === 3) return vendorSearch.status === "done" && vendorSearch.vendors.length > 0
     if (step === 4) return selectedVendorIds.length > 0

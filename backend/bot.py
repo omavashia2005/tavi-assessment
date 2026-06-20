@@ -103,6 +103,7 @@ async def chat(request: ChatRequest) -> ChatResponse:
 
 _fc = Firecrawl(api_key=os.environ.get("FIRECRAWL_API_KEY", ""))
 _vendor_cache: dict[str, dict] = {}  # ponytail: in-process cache, cleared on restart
+_vendor_in_flight: dict[str, asyncio.Task] = {}  # dedupe concurrent identical requests
 
 _VENDOR_SCHEMA = {
     "type": "object",
@@ -127,15 +128,8 @@ _VENDOR_SCHEMA = {
 }
 
 
-@app.post("/api/vendor-search", response_model=VendorSearchResponse)
-async def vendor_search(order: WorkOrder) -> VendorSearchResponse:
-    if not order.siteLocation or not order.serviceType:
-        raise HTTPException(422, "siteLocation and serviceType are required")
-
-    cache_key = f"{order.siteLocation}|{order.serviceType}|{order.budget}|{order.requiredServiceDate}"
-    if cache_key in _vendor_cache:
-        return VendorSearchResponse.model_validate(_vendor_cache[cache_key])
-
+async def _run_vendor_search(order: WorkOrder, cache_key: str) -> dict:
+    """Always writes to cache, even if all clients disconnect. Single source of Firecrawl calls."""
     prompt = (
         f"Search the Better Business Bureau (BBB) for accredited businesses that provide "
         f"'{order.serviceType}' services within a strict 20-mile radius of {order.siteLocation}. "
@@ -147,7 +141,6 @@ async def vendor_search(order: WorkOrder) -> VendorSearchResponse:
         f"Budget context: {order.budget or 'not specified'}. "
         f"Service needed by: {order.requiredServiceDate or 'flexible'}."
     )
-
     result = await asyncio.to_thread(
         _fc.agent,
         prompt=prompt,
@@ -156,12 +149,34 @@ async def vendor_search(order: WorkOrder) -> VendorSearchResponse:
         model="spark-1-mini",
         max_credits=500,
     )
-
     if not result or not getattr(result, "data", None):
-        raise HTTPException(502, "Firecrawl agent returned no data")
-
+        raise RuntimeError("Firecrawl agent returned no data")
     _vendor_cache[cache_key] = result.data
-    return VendorSearchResponse.model_validate(result.data)
+    return result.data
+
+
+@app.post("/api/vendor-search", response_model=VendorSearchResponse)
+async def vendor_search(order: WorkOrder) -> VendorSearchResponse:
+    if not order.siteLocation or not order.serviceType:
+        raise HTTPException(422, "siteLocation and serviceType are required")
+
+    cache_key = f"{order.siteLocation}|{order.serviceType}|{order.budget}|{order.requiredServiceDate}"
+    if cache_key in _vendor_cache:
+        return VendorSearchResponse.model_validate(_vendor_cache[cache_key])
+
+    # Dedupe: if an identical search is already running, wait on the same task.
+    # asyncio.shield() ensures the search keeps running even if THIS client disconnects.
+    task = _vendor_in_flight.get(cache_key)
+    if task is None:
+        task = asyncio.create_task(_run_vendor_search(order, cache_key))
+        _vendor_in_flight[cache_key] = task
+        task.add_done_callback(lambda _t: _vendor_in_flight.pop(cache_key, None))
+
+    try:
+        data = await asyncio.shield(task)
+    except RuntimeError as e:
+        raise HTTPException(502, str(e))
+    return VendorSearchResponse.model_validate(data)
 
 
 async def run_bot(transport: BaseTransport, runner_args: RunnerArguments) -> None:
