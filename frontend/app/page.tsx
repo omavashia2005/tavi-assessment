@@ -61,11 +61,14 @@ export default function IntakePage() {
           ])
         },
         onBotOutput: ({ aggregated_by, text }) => {
-          if (aggregated_by !== "sentence" || !text.trim()) return
-          setTurns((previous) => [
-            ...previous,
-            { id: Date.now(), role: "agent", text },
-          ])
+          const normalized = text.trim()
+          if (aggregated_by !== "sentence" || !normalized) return
+          setTurns((previous) => {
+            const last = previous.at(-1)
+            // ponytail: Pipecat may repeat a sentence across output lifecycle events.
+            if (last?.role === "agent" && last.text.trim() === normalized) return previous
+            return [...previous, { id: Date.now(), role: "agent", text: normalized }]
+          })
         },
         onBotLlmStopped: () => {
           if (!voiceEnabledRef.current) setStatus("idle")
