@@ -5,11 +5,11 @@ import random
 import re
 import urllib.parse
 import urllib.request
-from typing import cast
+from typing import Annotated, cast
 
 from db import DB_PATH, create_vendor, create_work_order, get_vendor, get_work_order
 from dotenv import load_dotenv
-from fastapi import BackgroundTasks, HTTPException
+from fastapi import BackgroundTasks, HTTPException, Query
 from fastapi.middleware.cors import CORSMiddleware
 from firecrawl import Firecrawl
 from geopy.geocoders import Nominatim
@@ -114,6 +114,14 @@ def _post_json(url: str, payload: dict) -> dict:
     return json.loads(body) if body else {}
 
 
+def _get_json(url: str, params: dict) -> dict:
+    with urllib.request.urlopen(
+        f"{url}?{urllib.parse.urlencode(params)}", timeout=15
+    ) as response:
+        body = response.read()
+    return json.loads(body) if body else {}
+
+
 async def generate_response(
     outreach_message: str, vendor_id: str, work_order_id: str
 ) -> None:
@@ -128,7 +136,7 @@ async def generate_response(
     if not response.output_text:
         raise RuntimeError("OpenAI returned no vendor response")
     await asyncio.to_thread(
-        _post_json,
+        _get_json,
         f"{os.getenv('INTERNAL_API_URL', 'http://127.0.0.1:7860').rstrip('/')}/receive-message",
         {
             "vendor_id": vendor_id,
@@ -138,8 +146,10 @@ async def generate_response(
     )
 
 
-@app.post("/receive-message", response_model=VendorConversation)
-async def receive_message(request: ReceiveMessageRequest) -> VendorConversation:
+@app.get("/receive-message", response_model=VendorConversation)
+async def receive_message(
+    request: Annotated[ReceiveMessageRequest, Query()],
+) -> VendorConversation:
     work_order = get_work_order(request.work_order_id)
     vendor = get_vendor(request.vendor_id)
     if not work_order or not vendor or vendor["work_order_id"] != request.work_order_id:

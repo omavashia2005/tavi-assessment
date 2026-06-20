@@ -93,19 +93,19 @@ def test_persist_work_order_vendors() -> None:
     assert persisted_vendors == saved_vendors
 
 
-def test_generate_response_posts_to_receive_message() -> None:
+def test_generate_response_gets_receive_message() -> None:
     with (
         patch(
             "bot.openai.responses.create",
             return_value=SimpleNamespace(output_text="We can quote $8,500."),
         ) as create,
-        patch("bot._post_json", return_value={}) as post,
+        patch("bot._get_json", return_value={}) as get,
         patch.dict("os.environ", {"INTERNAL_API_URL": "http://backend.test"}),
     ):
         asyncio.run(generate_response("Please quote the job.", "vendor-1", "order-1"))
 
     create.assert_awaited_once()
-    post.assert_called_once_with(
+    get.assert_called_once_with(
         "http://backend.test/receive-message",
         {
             "vendor_id": "vendor-1",
@@ -158,5 +158,5 @@ def test_receive_message_posts_conversation_to_frontend() -> None:
 if __name__ == "__main__":
     test_submit_work_order()
     test_persist_work_order_vendors()
-    test_generate_response_posts_to_receive_message()
+    test_generate_response_gets_receive_message()
     test_receive_message_posts_conversation_to_frontend()
