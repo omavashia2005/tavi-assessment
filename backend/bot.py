@@ -517,10 +517,5 @@ async def bot(runner_args: RunnerArguments) -> None:
     transport = await create_transport(runner_args, transport_params)
     await run_bot(transport, runner_args)
 
-
-
-
-
-
 if __name__ == "__main__":
     main()

@@ -1,12 +1,44 @@
-# tavi-hackathon-template
+# Tavi frontend
 
-This is a [Next.js](https://nextjs.org) project bootstrapped with [v0](https://v0.app).
+Next.js app for work-order intake and vendor management.
 
-## Built with v0
+## Architecture
 
-This repository is linked to a [v0](https://v0.app) project. You can continue developing by visiting the link below -- start new chats to make changes, and v0 will push commits directly to this repo. Every merge to `main` will automatically deploy.
+### Component & data flow
 
-[Continue working on v0 →](https://v0.app/chat/projects/prj_gsI1SH94WU7Nvo9kAsEAh8W6nbAl)
+```mermaid
+graph TD
+  WP["WorkflowProvider<br/>React context + localStorage"]
+  ES["EventSource<br/>GET /api/receive-messages"]
+  PC["PipecatClient<br/>WebRTC transport"]
+
+  WP -- subscribes --> ES
+  ES -- vendor messages --> WP
+
+  IntakePage["/ — Intake"] -- voice --> PC
+  IntakePage -- text chat --> ChatAPI["POST /api/chat"]
+  IntakePage -- place order --> WorkOrderAPI["POST /api/work-order"]
+
+  OrdersPage["/orders — Orders"] -- send message --> SendAPI["POST /api/send-message"]
+
+  WP --> IntakePage
+  WP --> OrdersPage
+  PC -- work order tool call --> WP
+```
+
+### Intake page modes
+
+```mermaid
+flowchart LR
+  A([User opens /]) --> B{choose mode}
+  B -- voice --> C["PipecatClient<br/>WebRTC to /start"]
+  B -- text --> D["fetch POST /api/chat"]
+  C --> E["LLM fills work order<br/>via server message"]
+  D --> E
+  E --> F{all fields filled?}
+  F -- yes --> G["Place Order<br/>POST /api/work-order"]
+  G --> H["/orders — vendor cards<br/>+ SSE replies"]
+```
 
 ## Getting Started
 
