@@ -36,6 +36,9 @@ class VendorResult(BaseModel):
     contactInfo: str = Field(description="Phone number")
     reviewScore: str = Field(description="BBB rating or brief review summary")
     avgCost: str = Field(default="", description="Average cost estimate, empty if unavailable")
+    vendorState: Literal[
+        "AWAITING_RESPONSE", "NEGOTIATING", "QUOTE_RECEIVED", "SELECTED"
+    ] = "AWAITING_RESPONSE"
 
 
 class VendorSearchResponse(BaseModel):

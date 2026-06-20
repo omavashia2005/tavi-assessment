@@ -1,14 +1,15 @@
-import asyncio
-import urllib.parse
 import os
-from datetime import date
-from geopy.geocoders import Nominatim
-from geopy.location import Location
+import re
+import urllib.parse
 from typing import cast
+
+from db import DB_PATH, create_vendor, create_work_order
 from dotenv import load_dotenv
-from fastapi import HTTPException
+from fastapi import BackgroundTasks, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from firecrawl import Firecrawl
+from geopy.geocoders import Nominatim
+from geopy.location import Location
 from openai import AsyncOpenAI
 from pipecat.adapters.schemas.function_schema import FunctionSchema
 from pipecat.audio.vad.silero import SileroVADAnalyzer
@@ -28,8 +29,14 @@ from pipecat.services.openai.stt import OpenAIRealtimeSTTService
 from pipecat.services.openai.tts import OpenAITTSService
 from pipecat.transports.base_transport import BaseTransport, TransportParams
 from pipecat.workers.runner import WorkerRunner
-
-from schemas import ChatRequest, ChatResponse, VendorSearchResponse, WorkOrder
+from schemas import (
+    ChatRequest,
+    ChatResponse,
+    VendorResult,
+    VendorSearchResponse,
+    WorkOrder,
+)
+from system_prompts import CHAT_INSTRUCTION, SYSTEM_INSTRUCTION
 
 load_dotenv()
 openai = AsyncOpenAI()
@@ -42,47 +49,42 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-SYSTEM_INSTRUCTION = f"""
-You are Tavi, a concise voice assistant creating a facility maintenance work order.
-Ask one short follow-up question at a time until you know the site location, problem,
-budget, and required service date. Keep spoken replies brief and natural. Infer
-serviceType yourself from the problem described; do not ask the user to choose it.
-Use the concise vendor trade that should handle the work, such as Janitor, Plumber,
-HVAC, Electrical, Locksmith, Pest Control, or another best-fitting trade.
-Store addresses only as "Street Number Street Name, City State ZIP", for example
-"712 S Forest Ave, Tempe AZ 85281". Ask the user to clarify incomplete addresses.
-Today is {date.today().isoformat()}. Resolve relative dates such as "tomorrow",
-"next Friday", or "in 10 days" against today and store requiredServiceDate as
-YYYY-MM-DD. Do not ask for clarification when the relative date is unambiguous.
 
-After every user turn that adds or changes work-order information, call
-update_work_order with the complete current work order. Use an empty string for
-unknown fields. Once the core details are known, draft a short outreachMessage.
-Never invent details the user did not provide. The outreach message should contain all the fields you got so the vendor gets 
-maximum information about what the job is, where it is, the budget, and when. Keep the outreach message cordial and make sure you're greeting 
-the vendor and keeping your message short, informative, and professionally warm.
-""".strip()
-
-CHAT_INSTRUCTION = f"""
-You are Tavi, a concise chat assistant creating a facility maintenance work order.
-Ask one short follow-up question at a time. Preserve known work-order values and
-never invent details. Infer serviceType yourself from the user's description; do not
-ask the user to choose it. Use the concise vendor trade that should handle the work,
-such as Janitor, Plumber, HVAC, Electrical, Locksmith, Pest Control, or another
-best-fitting trade. Addresses must use "Street Number Street Name, City State ZIP".
-Today is {date.today().isoformat()}; resolve relative dates and store them as
-YYYY-MM-DD. Return the next assistant message and the complete current work order,
-using empty strings for unknown fields. The outreach message should contain all the fields you got so the vendor gets 
-maximum information about what the job is, where it is, the budget, and when. Keep the outreach message cordial and make sure you're greeting 
-the vendor and keeping your message short, informative, and professionally warm.
-""".strip()
-
+firecrawl = Firecrawl(api_key=os.environ.get("FIRECRAWL_API_KEY", ""))
+geolocator = Nominatim(user_agent="tavi-hackathon")
 transport_params = {
     "webrtc": lambda: TransportParams(
         audio_in_enabled=True,
         audio_out_enabled=True,
     ),
 }
+
+
+def _money(value: str) -> float:
+    match = re.search(r"\d[\d,]*(?:\.\d+)?", value)
+    return float(match.group().replace(",", "")) if match else 0.0
+
+
+def _persist_work_order_vendors(
+    order: WorkOrder, vendors: list[VendorResult], *, db_path=DB_PATH
+) -> None:
+    work_order = create_work_order(
+        location=order.siteLocation,
+        type=order.serviceType,
+        budget=_money(order.budget),
+        date=order.requiredServiceDate,
+        db_path=db_path,
+    )
+    for vendor in vendors:
+        create_vendor(
+            work_order_id=work_order["work_order_id"],
+            name=vendor.name,
+            # ponytail: DB requires a price; use 0 until it supports unknown costs.
+            price=_money(vendor.avgCost),
+            outreach_message=order.outreachMessage,
+            vendor_state=vendor.vendorState,
+            db_path=db_path,
+        )
 
 
 @app.post("/api/chat", response_model=ChatResponse)
@@ -110,9 +112,6 @@ async def chat(request: ChatRequest) -> ChatResponse:
     return response.output_parsed
 
 
-firecrawl = Firecrawl(api_key=os.environ.get("FIRECRAWL_API_KEY", ""))
-geolocator = Nominatim(user_agent="tavi-hackathon")
-
 @app.post("/api/vendor-search", response_model=VendorSearchResponse)
 async def vendor_search(order: WorkOrder) -> VendorSearchResponse:
     if not order.siteLocation or not order.serviceType:
@@ -125,10 +124,9 @@ async def vendor_search(order: WorkOrder) -> VendorSearchResponse:
     # 2. Define the base URL
     base_url = "https://www.bbb.org/search"
 
-
     if not location:
-        raise HTTPException(status_code=403)
-        
+        raise HTTPException(status_code=403, detail="Invalid location")
+
     city, state, _ = address_string.split(",", 1)[1].strip().rsplit(" ", 2)
 
     # 3. Put all your fields into a dictionary
@@ -144,26 +142,47 @@ async def vendor_search(order: WorkOrder) -> VendorSearchResponse:
         "find_text": f"{order.serviceType}",
         "find_type": "Category",
         "page": "1",
-        "touched": "4"
+        "touched": "4",
     }
 
     # 4. Generate the final, safe URL
     final_url = f"{base_url}?{urllib.parse.urlencode(params)}"
 
-
-
     data = firecrawl.scrape(
-        final_url, 
-        formats=[{
-            "type": "json", 
-            "schema": VendorSearchResponse, 
-            "prompt": "I just want a simple JSON object in the aforementioned schema"
-        }]
+        final_url,
+        formats=[
+            {
+                "type": "json",
+                "schema": VendorSearchResponse,
+                "prompt": "I just want a simple JSON object in the aforementioned schema",
+            }
+        ],
     )
 
-    search_result = data.json
+    return VendorSearchResponse.model_validate(data.json)
 
-    return VendorSearchResponse.model_validate(search_result)
+
+@app.post("/api/work-order", response_model=VendorSearchResponse)
+async def submit_work_order(
+    order: WorkOrder, background_tasks: BackgroundTasks
+) -> VendorSearchResponse:
+    if not all(
+        (
+            order.siteLocation,
+            order.serviceType,
+            order.budget,
+            order.requiredServiceDate,
+        )
+    ):
+        raise HTTPException(
+            422,
+            "siteLocation, serviceType, budget, and requiredServiceDate are required",
+        )
+
+    result = await vendor_search(order)
+    response = VendorSearchResponse(vendors=result.vendors[:5])
+    background_tasks.add_task(_persist_work_order_vendors, order, response.vendors)
+    return response
 
 
 async def run_bot(transport: BaseTransport, runner_args: RunnerArguments) -> None:
