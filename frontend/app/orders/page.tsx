@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect, useMemo, useState } from "react"
+import { useEffect, useMemo, useRef, useState } from "react"
 import Link from "next/link"
 import {
   ArrowRight,
@@ -9,13 +9,17 @@ import {
   ClipboardList,
   Clock,
   Gavel,
+  Loader2,
   MapPin,
+  MessageSquare,
   Phone,
-  Sparkles,
+  RotateCcw,
+  Send,
   Star,
   Wrench,
   X,
 } from "lucide-react"
+import { toast } from "sonner"
 import { cn } from "@/lib/utils"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
@@ -27,11 +31,11 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select"
+import { Textarea } from "@/components/ui/textarea"
 import { useWorkflow } from "@/components/workflow-provider"
 import {
-  VENDOR_STATES,
+  WORK_ORDER_STATES,
   type VendorResult,
-  type VendorState,
   type WorkOrderState,
 } from "@/lib/types"
 import type { PlacedOrder } from "@/components/workflow-provider"
@@ -43,24 +47,6 @@ const DATE_TIME_FORMATTER = new Intl.DateTimeFormat("en-US", {
   hour: "numeric",
   minute: "2-digit",
 })
-
-const WORK_ORDER_STATE_STYLES: Record<WorkOrderState, string> = {
-  "Contacting Vendors": "bg-blue-500/15 text-blue-700 ring-blue-500/30 dark:text-blue-300",
-  Auctioning: "bg-amber-500/15 text-amber-700 ring-amber-500/30 dark:text-amber-300",
-  "Vendor Assigned": "bg-violet-500/15 text-violet-700 ring-violet-500/30 dark:text-violet-300",
-  "Site Visit": "bg-cyan-500/15 text-cyan-700 ring-cyan-500/30 dark:text-cyan-300",
-  "Order Complete": "bg-emerald-500/15 text-emerald-700 ring-emerald-500/30 dark:text-emerald-300",
-}
-
-const VENDOR_STATE_STYLES: Record<VendorState, string> = {
-  AWAITING_RESPONSE: "bg-blue-500/15 text-blue-700 ring-blue-500/30 dark:text-blue-300",
-  NEGOTIATING: "bg-amber-500/15 text-amber-700 ring-amber-500/30 dark:text-amber-300",
-  QUOTE_RECEIVED: "bg-violet-500/15 text-violet-700 ring-violet-500/30 dark:text-violet-300",
-  SELECTED: "bg-emerald-500/15 text-emerald-700 ring-emerald-500/30 dark:text-emerald-300",
-}
-
-const formatVendorState = (s: VendorState) =>
-  s.toLowerCase().split("_").map((w) => w[0].toUpperCase() + w.slice(1)).join(" ")
 
 export default function OrdersPage() {
   const { placedOrders } = useWorkflow()
@@ -217,41 +203,27 @@ function OrderDetail({ order }: { order: PlacedOrder }) {
   return (
     <section className="flex flex-col gap-6">
       <Card className="overflow-hidden">
-        <CardContent className="flex flex-col gap-4 py-5 sm:flex-row sm:items-center sm:justify-between">
-          <div className="flex flex-col gap-2">
-            <div className="flex items-center gap-2 text-xs text-muted-foreground">
-              <span className="tabular-nums">
-                Placed {DATE_TIME_FORMATTER.format(order.placedAt)}
-              </span>
-              <span aria-hidden="true">·</span>
-              <span>
-                {order.vendors.length} vendor{order.vendors.length === 1 ? "" : "s"} competing
-              </span>
-            </div>
-            <h2 className="text-xl font-semibold tracking-tight">
-              {order.workOrder.serviceType || "Untitled service"}
-            </h2>
-            <div className="flex items-center gap-1.5 text-sm text-muted-foreground">
-              <MapPin className="size-3.5" aria-hidden="true" />
-              {order.workOrder.siteLocation || "—"}
-            </div>
+        <CardContent className="flex flex-col gap-2 py-5">
+          <div className="flex items-center gap-2 text-xs text-muted-foreground">
+            <span className="tabular-nums">
+              Placed {DATE_TIME_FORMATTER.format(order.placedAt)}
+            </span>
+            <span aria-hidden="true">·</span>
+            <span>
+              {order.vendors.length} vendor{order.vendors.length === 1 ? "" : "s"} competing
+            </span>
           </div>
-          <div className="flex flex-col items-start gap-1 sm:items-end">
-            <span className="text-[11px] font-medium uppercase tracking-wider text-muted-foreground">
-              Order status
-            </span>
-            <span
-              className={cn(
-                "inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-sm font-semibold ring-1",
-                WORK_ORDER_STATE_STYLES[order.state],
-              )}
-            >
-              <Sparkles className="size-3.5" aria-hidden="true" />
-              {order.state}
-            </span>
+          <h2 className="text-xl font-semibold tracking-tight">
+            {order.workOrder.serviceType || "Untitled service"}
+          </h2>
+          <div className="flex items-center gap-1.5 text-sm text-muted-foreground">
+            <MapPin className="size-3.5" aria-hidden="true" />
+            {order.workOrder.siteLocation || "—"}
           </div>
         </CardContent>
       </Card>
+
+      <WorkOrderTimeline current={order.state} />
 
       {order.vendors.length === 0 ? (
         <Card>
@@ -305,14 +277,6 @@ function VendorCard({
             </span>
           ) : null}
         </div>
-        <span
-          className={cn(
-            "inline-flex shrink-0 items-center rounded-full px-2 py-0.5 text-[11px] font-medium ring-1",
-            VENDOR_STATE_STYLES[vendor.vendorState],
-          )}
-        >
-          {formatVendorState(vendor.vendorState)}
-        </span>
       </div>
 
       <div className="flex items-baseline gap-1.5">
@@ -327,8 +291,6 @@ function VendorCard({
         <DetailItem icon={<CalendarDays className="size-3" />} label="Date" value={vendor.serviceDate || "—"} />
         <DetailItem icon={<Clock className="size-3" />} label="Time" value={vendor.serviceTime || "—"} />
       </dl>
-
-      <Timeline current={vendor.vendorState} compact />
     </button>
   )
 }
@@ -378,14 +340,6 @@ function VendorModal({
         <CardContent className="flex flex-col gap-6 py-6">
           <div className="flex items-start justify-between gap-4">
             <div className="flex flex-col gap-1.5">
-              <span
-                className={cn(
-                  "inline-flex w-fit items-center rounded-full px-2 py-0.5 text-[11px] font-medium ring-1",
-                  VENDOR_STATE_STYLES[vendor.vendorState],
-                )}
-              >
-                {formatVendorState(vendor.vendorState)}
-              </span>
               <h2 id="vendor-modal-title" className="text-2xl font-semibold tracking-tight">
                 {vendor.name}
               </h2>
@@ -426,59 +380,200 @@ function VendorModal({
             <DetailItem icon={<Clock className="size-3.5" />} label="Time" value={vendor.serviceTime || "—"} />
           </dl>
 
-          <div className="flex flex-col gap-2 border-t border-border pt-5">
-            <span className="text-xs font-medium uppercase tracking-wider text-muted-foreground">
-              Vendor progress
-            </span>
-            <Timeline current={vendor.vendorState} />
-          </div>
+          <ConversationSection vendor={vendor} />
         </CardContent>
       </Card>
     </div>
   )
 }
 
-function Timeline({ current, compact = false }: { current: VendorState; compact?: boolean }) {
-  const currentIndex = VENDOR_STATES.indexOf(current)
+function ConversationSection({ vendor }: { vendor: VendorResult }) {
+  const { vendorMessages, sendMessage } = useWorkflow()
+  const message = vendorMessages[vendor.id]
+
+  const [draft, setDraft] = useState<string>(message?.agent_response ?? "")
+  const [sending, setSending] = useState(false)
+  // Track the last agent_response we synced into the draft so we only auto-update
+  // the draft when the user hasn't manually edited it.
+  const lastSyncedRef = useRef<string>(message?.agent_response ?? "")
+
+  useEffect(() => {
+    const incoming = message?.agent_response ?? ""
+    const userHasEdited = draft !== lastSyncedRef.current
+    if (!userHasEdited && incoming !== draft) {
+      setDraft(incoming)
+      lastSyncedRef.current = incoming
+    } else if (userHasEdited) {
+      // Still update the ref's reference so a later reset uses the freshest value.
+      lastSyncedRef.current = incoming
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [message?.agent_response, vendor.id])
+
+  const handleSend = async () => {
+    setSending(true)
+    try {
+      await sendMessage(vendor.id, draft)
+      toast.success("Response sent")
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Failed to send response")
+    } finally {
+      setSending(false)
+    }
+  }
+
+  const handleReset = () => {
+    const incoming = message?.agent_response ?? ""
+    setDraft(incoming)
+    lastSyncedRef.current = incoming
+  }
+
   return (
-    <ol
-      className={cn("flex items-center gap-1.5", compact ? "pt-3" : "pt-1")}
-      aria-label={`Vendor progress: ${formatVendorState(current)}`}
-    >
-      {VENDOR_STATES.map((s, i) => {
-        const isDone = i < currentIndex
-        const isActive = i === currentIndex
-        return (
-          <li key={s} className="flex flex-1 items-center gap-1.5">
-            <span
-              className={cn(
-                "flex shrink-0 items-center justify-center rounded-full border-2 transition-colors",
-                compact ? "size-5" : "size-7",
-                (isDone || isActive) && "border-primary bg-primary text-primary-foreground",
-                !isDone && !isActive && "border-border bg-card text-muted-foreground",
-              )}
-              aria-label={formatVendorState(s)}
-              title={formatVendorState(s)}
-            >
-              {isDone ? (
-                <Check className={compact ? "size-2.5" : "size-3.5"} />
-              ) : (
-                <span className={cn("font-semibold", compact ? "text-[9px]" : "text-xs")}>
-                  {i + 1}
-                </span>
-              )}
+    <div className="flex flex-col gap-3 border-t border-border pt-5">
+      <span className="flex items-center gap-1.5 text-xs font-medium uppercase tracking-wider text-muted-foreground">
+        <MessageSquare className="size-3.5" />
+        Conversation
+      </span>
+
+      {!message ? (
+        <div className="flex items-center gap-2 rounded-lg border border-dashed border-border bg-muted/30 px-4 py-6 text-sm text-muted-foreground">
+          <Loader2 className="size-4 animate-spin" aria-hidden="true" />
+          Waiting for vendor response…
+        </div>
+      ) : (
+        <div className="flex flex-col gap-4">
+          <div className="flex flex-col gap-1.5">
+            <span className="text-[11px] font-medium uppercase tracking-wider text-muted-foreground">
+              Vendor said
             </span>
-            {i < VENDOR_STATES.length - 1 ? (
+            <blockquote className="rounded-lg border-l-2 border-primary/60 bg-muted/50 px-4 py-3 text-sm leading-relaxed text-foreground/90">
+              {message.vendor_response || <span className="italic text-muted-foreground">No content</span>}
+            </blockquote>
+          </div>
+
+          <div className="flex flex-col gap-1.5">
+            <label
+              htmlFor={`agent-draft-${vendor.id}`}
+              className="text-[11px] font-medium uppercase tracking-wider text-muted-foreground"
+            >
+              Your reply
+            </label>
+            <Textarea
+              id={`agent-draft-${vendor.id}`}
+              value={draft}
+              onChange={(e) => setDraft(e.target.value)}
+              rows={5}
+              placeholder="Draft a response to the vendor…"
+              disabled={sending}
+            />
+          </div>
+
+          <div className="flex flex-wrap items-center justify-end gap-2">
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              onClick={handleReset}
+              disabled={sending || draft === (message.agent_response ?? "")}
+            >
+              <RotateCcw data-icon="inline-start" />
+              Reset to draft
+            </Button>
+            <Button type="button" onClick={handleSend} disabled={sending}>
+              {sending ? (
+                <Loader2 data-icon="inline-start" className="animate-spin" />
+              ) : (
+                <Send data-icon="inline-start" />
+              )}
+              Approve & send
+            </Button>
+          </div>
+        </div>
+      )}
+    </div>
+  )
+}
+
+function WorkOrderTimeline({ current }: { current: WorkOrderState }) {
+  const currentIndex = WORK_ORDER_STATES.indexOf(current)
+  return (
+    <section
+      aria-label={`Order status: ${current}`}
+      className="relative overflow-hidden rounded-2xl border border-border bg-gradient-to-br from-card via-card to-muted/40 px-5 py-6 sm:px-8 sm:py-7"
+    >
+      <div className="mb-5 flex items-center justify-between gap-3">
+        <span className="flex items-center gap-1.5 text-[11px] font-medium uppercase tracking-wider text-muted-foreground">
+          <Sparkle />
+          Order status
+        </span>
+        <span className="text-sm font-semibold tracking-tight text-foreground">
+          {current}
+        </span>
+      </div>
+
+      <ol className="flex items-start gap-2 sm:gap-3">
+        {WORK_ORDER_STATES.map((s, i) => {
+          const isDone = i < currentIndex
+          const isActive = i === currentIndex
+          const isFuture = i > currentIndex
+          return (
+            <li key={s} className="flex flex-1 flex-col items-center gap-2 min-w-0">
+              <div className="flex w-full items-center gap-1.5 sm:gap-2">
+                <span
+                  className={cn(
+                    "relative flex size-7 shrink-0 items-center justify-center rounded-full border-2 transition-colors sm:size-9",
+                    isDone && "border-primary bg-primary text-primary-foreground",
+                    isActive &&
+                      "border-primary bg-primary text-primary-foreground ring-4 ring-primary/20",
+                    isFuture && "border-border bg-card text-muted-foreground",
+                  )}
+                >
+                  {isDone ? (
+                    <Check className="size-3.5 sm:size-4" />
+                  ) : (
+                    <span className="text-[11px] font-semibold sm:text-xs">{i + 1}</span>
+                  )}
+                  {isActive ? (
+                    <span className="absolute inset-0 -z-10 animate-ping rounded-full bg-primary/40" />
+                  ) : null}
+                </span>
+                {i < WORK_ORDER_STATES.length - 1 ? (
+                  <span
+                    className={cn(
+                      "h-0.5 flex-1 rounded-full transition-colors",
+                      i < currentIndex ? "bg-primary" : "bg-border",
+                    )}
+                  />
+                ) : null}
+              </div>
               <span
                 className={cn(
-                  "h-px flex-1 transition-colors",
-                  i < currentIndex ? "bg-primary" : "bg-border",
+                  "w-full truncate text-center text-[10px] font-medium leading-tight sm:text-xs",
+                  isActive && "text-foreground",
+                  isDone && "text-foreground/80",
+                  isFuture && "text-muted-foreground",
                 )}
-              />
-            ) : null}
-          </li>
-        )
-      })}
-    </ol>
+                title={s}
+              >
+                {s}
+              </span>
+            </li>
+          )
+        })}
+      </ol>
+    </section>
+  )
+}
+
+function Sparkle() {
+  return (
+    <svg
+      viewBox="0 0 24 24"
+      className="size-3"
+      fill="currentColor"
+      aria-hidden="true"
+    >
+      <path d="M12 2l1.8 6.2L20 10l-6.2 1.8L12 18l-1.8-6.2L4 10l6.2-1.8L12 2z" />
+    </svg>
   )
 }
