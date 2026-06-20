@@ -273,6 +273,8 @@ async def submit_work_order(
         vendor.model_copy(update={"vendorState": "AWAITING_RESPONSE"})
         for vendor in result.vendors[:5]
     ]
+    if not selected_vendors:
+        raise HTTPException(404, "No vendors found")
     work_order, vendors = _persist_work_order_vendors(order, selected_vendors)
     response = VendorSearchResponse(
         vendors=[
