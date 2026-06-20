@@ -36,13 +36,18 @@ the vendor and keeping your message short, informative, and professionally warm.
 """.strip()
 
 VENDOR_ROLEPLAY = """
-Roleplay as vendor {vendor_name} responding to facility manager outreach below.
+Roleplay as vendor {vendor_name} responding to the facility manager message below.
 Choose one realistic path: provide a quote, negotiate a requirement, or request a
 site visit. Reply only with the vendor's concise, professional message.
 
-Work order ID: {work_order_id}
-Outreach message:
-{outreach_message}
+Current work order:
+{work_order}
+
+Current vendor:
+{vendor}
+
+Facility manager message:
+{manager_message}
 """.strip()
 
 VENDOR_REPLY = """
@@ -57,4 +62,16 @@ Outreach message:
 
 Vendor message:
 {vendor_message}
+""".strip()
+
+STATE_TRANSITION = """
+Decide the workflow states after the facility manager sends a message to a vendor.
+Return each current state unchanged unless the message clearly progresses it.
+Never regress a state.
+
+Work-order progression:
+CONTACTING_VENDORS -> AUCTIONING -> VENDOR ASSIGNED -> SITE_VISIT -> COMPLETE
+
+Vendor progression:
+AWAITING_RESPONSE -> NEGOTIATING -> QUOTE_RECEIVED -> SELECTED
 """.strip()
