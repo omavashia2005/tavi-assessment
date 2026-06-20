@@ -1,5 +1,6 @@
 "use client"
 
+import { useEffect, useState } from "react"
 import Link from "next/link"
 import { usePathname } from "next/navigation"
 import { Check } from "lucide-react"
@@ -21,11 +22,6 @@ function workOrderComplete(wo: WorkOrder) {
   return REQUIRED.every((f) => wo[f].trim().length > 0)
 }
 
-function vendorsFound(wo: WorkOrder) {
-  if (typeof window === "undefined") return false
-  const key = `vendor-search:${wo.siteLocation}|${wo.serviceType}|${wo.budget}|${wo.requiredServiceDate}`
-  return !!sessionStorage.getItem(key)
-}
 
 function TaviMark() {
   return (
@@ -56,13 +52,13 @@ function currentStepFor(pathname: string) {
 
 export function AppShell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname()
-  const { workOrder, selectedVendorIds } = useWorkflow()
+  const { workOrder, selectedVendorIds, vendorSearch } = useWorkflow()
   const activeStep = currentStepFor(pathname)
 
   function isUnlocked(step: number) {
     if (step <= 1) return true
     if (step === 2) return workOrderComplete(workOrder)
-    if (step === 3) return vendorsFound(workOrder)
+    if (step === 3) return vendorSearch.status === "done" && vendorSearch.vendors.length > 0
     if (step === 4) return selectedVendorIds.length > 0
     return false
   }

@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect, useRef, useState } from "react"
+import { useEffect, useState } from "react"
 import Link from "next/link"
 import {
   ArrowLeft,
@@ -16,7 +16,7 @@ import { Alert, AlertTitle, AlertDescription } from "@/components/ui/alert"
 import { Badge } from "@/components/ui/badge"
 import { Separator } from "@/components/ui/separator"
 import { useWorkflow } from "@/components/workflow-provider"
-import { VendorCard, type VendorResult } from "@/components/vendors/vendor-card"
+import { VendorCard } from "@/components/vendors/vendor-card"
 
 const PHASES = [
   "Connecting to Better Business Bureau…",
@@ -25,6 +25,8 @@ const PHASES = [
   "Finalizing top picks…",
 ]
 
+const DISPLAY_LIMIT = 5
+
 function phaseFromProgress(p: number) {
   if (p < 25) return 0
   if (p < 60) return 1
@@ -32,114 +34,46 @@ function phaseFromProgress(p: number) {
   return 3
 }
 
-// Matches the ticker curve: 0→25 in ~8s, 25→60 in ~23s, 60→85 in ~38s, 85→99 in ~70s
+// Convert elapsed ms → progress %. Tuned so 60s ≈ phase 3, capped at 99% until fetch resolves.
 function progressFromElapsed(ms: number): number {
   const s = ms / 1000
   if (s < 8.3)  return (s / 8.3) * 25
   if (s < 31.6) return 25 + ((s - 8.3)  / 23.3) * 35
   if (s < 69.1) return 60 + ((s - 31.6) / 37.5) * 25
-  return Math.min(99,  85 + ((s - 69.1) / 70)   * 14)
-}
-
-type Status = "searching" | "done" | "error"
-
-const DISPLAY_LIMIT = 5
-
-function cacheKey(wo: ReturnType<typeof useWorkflow>["workOrder"]) {
-  return `vendor-search:${wo.siteLocation}|${wo.serviceType}|${wo.budget}|${wo.requiredServiceDate}`
+  return Math.min(99, 85 + ((s - 69.1) / 70) * 14)
 }
 
 export default function DiscoveryPage() {
-  const { workOrder } = useWorkflow()
-  const [status, setStatus] = useState<Status>("searching")
-  const [progress, setProgress] = useState(0)
-  const [vendors, setVendors] = useState<VendorResult[]>([])
-  const [errorMsg, setErrorMsg] = useState("")
-  const runRef = useRef(0)
+  const { workOrder, vendorSearch, startVendorSearch, resetVendorSearch } = useWorkflow()
+  // Re-render tick — purely so the progress bar updates while the search runs
+  const [, setTick] = useState(0)
 
-  const runSearch = (bustCache = false, initialProgress = 0) => {
-    const key = cacheKey(workOrder)
+  // Auto-start search if idle (e.g. first time landing on this page)
+  useEffect(() => {
+    if (vendorSearch.status === "idle") startVendorSearch()
+  }, [vendorSearch.status, startVendorSearch])
 
-    if (!bustCache) {
-      try {
-        const hit = sessionStorage.getItem(key)
-        if (hit) {
-          setVendors(JSON.parse(hit))
-          setProgress(100)
-          setStatus("done")
-          return
-        }
-      } catch { /* sessionStorage unavailable */ }
-    }
+  // While searching, force a re-render every 300ms so progress bar advances
+  useEffect(() => {
+    if (vendorSearch.status !== "searching") return
+    const id = setInterval(() => setTick((t) => t + 1), 300)
+    return () => clearInterval(id)
+  }, [vendorSearch.status])
 
-    const run = ++runRef.current
-    setStatus("searching")
-    setProgress(initialProgress)
-    setVendors([])
-    setErrorMsg("")
-
-    // Store start timestamp so a refresh can resume from the right progress offset
-    try { sessionStorage.setItem(key + ":pending", Date.now().toString()) } catch { /* quota */ }
-
-    fetch("http://localhost:7860/api/vendor-search", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(workOrder),
-    })
-      .then((r) => {
-        if (!r.ok) return r.text().then((t) => Promise.reject(t))
-        return r.json()
-      })
-      .then((data) => {
-        if (run !== runRef.current) return
-        const all: VendorResult[] = data.vendors ?? []
-        try {
-          sessionStorage.setItem(key, JSON.stringify(all))
-          sessionStorage.removeItem(key + ":pending")
-        } catch { /* quota */ }
-        setVendors(all)
-        setProgress(100)
-        setStatus("done")
-      })
-      .catch((e) => {
-        if (run !== runRef.current) return
-        try { sessionStorage.removeItem(key + ":pending") } catch { /* quota */ }
-        setErrorMsg(typeof e === "string" ? e : "Something went wrong. Please try again.")
-        setStatus("error")
-      })
+  const retry = () => {
+    resetVendorSearch()
+    // resetVendorSearch sets status to idle, the auto-start effect picks it up next tick
+    setTimeout(startVendorSearch, 0)
   }
 
-  // On mount: restore from cache, re-attach to in-flight search, or start fresh
-  useEffect(() => {
-    const key = cacheKey(workOrder)
-    try {
-      const hit = sessionStorage.getItem(key)
-      if (hit) { setVendors(JSON.parse(hit)); setProgress(100); setStatus("done"); return }
-      const pending = sessionStorage.getItem(key + ":pending")
-      if (pending) {
-        const startedAt = parseInt(pending, 10)
-        const initial = isNaN(startedAt) ? 0 : progressFromElapsed(Date.now() - startedAt)
-        runSearch(false, Math.min(99, initial))
-        return
-      }
-    } catch { /* sessionStorage unavailable */ }
-    runSearch()
-  }, []) // eslint-disable-line react-hooks/exhaustive-deps
-
-  // Progress ticker — independent of fetch
-  useEffect(() => {
-    if (status !== "searching") return
-    const id = setInterval(() => {
-      setProgress((prev) => {
-        if (prev >= 99) return 99
-        const step = prev < 25 ? 0.9 : prev < 60 ? 0.45 : prev < 85 ? 0.2 : 0.06
-        return Math.min(99, prev + step)
-      })
-    }, 300)
-    return () => clearInterval(id)
-  }, [status])
-
+  const progress =
+    vendorSearch.status === "searching"
+      ? progressFromElapsed(Date.now() - vendorSearch.startedAt)
+      : vendorSearch.status === "done"
+        ? 100
+        : 0
   const phase = phaseFromProgress(progress)
+  const vendors = vendorSearch.status === "done" ? vendorSearch.vendors : []
 
   return (
     <div className="flex flex-col gap-8">
@@ -150,10 +84,10 @@ export default function DiscoveryPage() {
           size="sm"
           className="w-fit -ml-1.5"
           nativeButton={false}
-          render={<Link href="/review" />}
+          render={<Link href="/" />}
         >
           <ArrowLeft data-icon="inline-start" />
-          Back to review
+          Back to intake
         </Button>
 
         <div className="flex flex-wrap items-end justify-between gap-4">
@@ -174,18 +108,16 @@ export default function DiscoveryPage() {
         </div>
       </div>
 
-      {/* Searching state */}
-      {status === "searching" && (
+      {(vendorSearch.status === "searching" || vendorSearch.status === "idle") && (
         <Card>
           <CardHeader>
             <CardTitle className="text-base">Discovery in progress</CardTitle>
             <CardDescription>
-              The AI agent is browsing BBB to find and rank qualified vendors. This typically
-              takes 30–90 seconds.
+              The AI agent is browsing BBB to find and rank qualified vendors. This typically takes
+              30–90 seconds.
             </CardDescription>
           </CardHeader>
           <CardContent className="flex flex-col gap-6">
-            {/* Phase steps */}
             <div className="flex flex-col gap-3">
               {PHASES.map((label, i) => {
                 const isDone = i < phase
@@ -231,16 +163,15 @@ export default function DiscoveryPage() {
         </Card>
       )}
 
-      {/* Error state */}
-      {status === "error" && (
+      {vendorSearch.status === "error" && (
         <Card>
           <CardContent className="flex flex-col gap-4 pt-6">
             <Alert variant="destructive">
               <RefreshCw />
               <AlertTitle>Discovery failed</AlertTitle>
-              <AlertDescription>{errorMsg}</AlertDescription>
+              <AlertDescription>{vendorSearch.error}</AlertDescription>
             </Alert>
-            <Button variant="outline" onClick={() => runSearch(true)} className="w-fit">
+            <Button variant="outline" onClick={retry} className="w-fit">
               <RefreshCw data-icon="inline-start" />
               Try again
             </Button>
@@ -248,8 +179,7 @@ export default function DiscoveryPage() {
         </Card>
       )}
 
-      {/* Results */}
-      {status === "done" && (
+      {vendorSearch.status === "done" && (
         <div className="flex flex-col gap-6">
           {vendors.length === 0 ? (
             <Card>
@@ -259,7 +189,7 @@ export default function DiscoveryPage() {
                 <p className="mt-1 text-sm">
                   Try broadening your search or adjusting the service type.
                 </p>
-                <Button variant="outline" onClick={() => runSearch(true)} className="mt-4">
+                <Button variant="outline" onClick={retry} className="mt-4">
                   <RefreshCw data-icon="inline-start" />
                   Search again
                 </Button>
@@ -270,7 +200,8 @@ export default function DiscoveryPage() {
               <div className="flex items-center justify-between gap-4">
                 <div className="flex flex-col gap-1">
                   <p className="text-sm text-muted-foreground">
-                    Showing top {Math.min(vendors.length, DISPLAY_LIMIT)} of {vendors.length} result{vendors.length !== 1 ? "s" : ""} within 20 miles
+                    Showing top {Math.min(vendors.length, DISPLAY_LIMIT)} of {vendors.length} result
+                    {vendors.length !== 1 ? "s" : ""} within 20 miles
                   </p>
                 </div>
                 <Button size="sm" nativeButton={false} render={<Link href="/vendors" />}>
