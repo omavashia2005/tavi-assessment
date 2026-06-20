@@ -20,6 +20,7 @@ from schemas import (
     SendMessageRequest,
     StateTransition,
     VendorResult,
+    VendorReply,
     VendorSearchResponse,
     WorkOrder,
 )
@@ -177,18 +178,32 @@ def test_vendor_message_is_available_to_stream() -> None:
                 "vendor_id": "vendor-1",
                 "work_order_id": "order-1",
                 "outreach_message": ORDER.outreachMessage,
+                "vendor_state": "AWAITING_RESPONSE",
             },
         ),
         patch(
-            "bot.openai.responses.create",
-            return_value=SimpleNamespace(output_text="Can you complete it by June 29?"),
-        ) as create,
+            "bot.openai.responses.parse",
+            return_value=SimpleNamespace(
+                output_parsed=VendorReply(
+                    agent_response="Can you complete it by June 29?",
+                    quote="$8,500",
+                    service_date="2026-06-29",
+                    service_time="9:00 AM",
+                    contact_info="555-0100",
+                    vendor_state="QUOTE_RECEIVED",
+                )
+            ),
+        ) as parse,
+        patch("bot.update_vendor") as update,
     ):
         response = asyncio.run(process_vendor_message(request))
         stream, event = asyncio.run(first_event())
 
-    create.assert_awaited_once()
+    parse.assert_awaited_once()
+    update.assert_called_once_with("vendor-1", vendor_state="QUOTE_RECEIVED")
     assert response.vendor_id == "vendor-1"
+    assert response.quote == "$8,500"
+    assert response.service_date == "2026-06-29"
     assert vendor_messages["vendor-1"] == response
     assert stream.media_type == "text/event-stream"
     assert '"vendor_id":"vendor-1"' in event

@@ -12,6 +12,7 @@ from db import (
     get_vendor,
     get_work_order,
     update_order_vendor_states,
+    update_vendor,
 )
 from dotenv import load_dotenv
 from fastapi import BackgroundTasks, HTTPException
@@ -48,6 +49,7 @@ from schemas import (
     SendMessageResponse,
     StateTransition,
     VendorConversation,
+    VendorReply,
     VendorResult,
     VendorSearchResponse,
     WorkOrder,
@@ -177,22 +179,39 @@ async def process_vendor_message(
     if not work_order or not vendor or vendor["work_order_id"] != request.work_order_id:
         raise HTTPException(404, "Work order or vendor not found")
 
-    response = await openai.responses.create(
+    previous = vendor_messages.get(vendor["vendor_id"])
+    response = await openai.responses.parse(
         model=os.getenv("OPENAI_LLM_MODEL", "gpt-4.1-mini"),
         input=VENDOR_REPLY.format(
             work_order_id=work_order["work_order_id"],
             vendor_id=vendor["vendor_id"],
             outreach_message=vendor["outreach_message"],
             vendor_message=request.generated_message,
-        ),
+        )
+        + "\n\nPreviously extracted conversation details:\n"
+        + (previous.model_dump_json() if previous else "None")
+        + "\n\nExtract cumulative quote, service date/time, contact info, and vendor state. "
+        "Preserve previous values unless contradicted. Use empty strings when unknown.",
+        text_format=VendorReply,
     )
-    if not response.output_text:
-        raise HTTPException(502, "OpenAI returned no agent response")
+    if not response.output_parsed:
+        raise HTTPException(502, "OpenAI returned no structured vendor reply")
 
+    reply = response.output_parsed.model_copy(
+        update={
+            "vendor_state": _progress_state(
+                vendor["vendor_state"],
+                response.output_parsed.vendor_state,
+                VENDOR_STATES,
+            )
+        }
+    )
+    update_vendor(vendor["vendor_id"], vendor_state=reply.vendor_state)
     conversation = VendorConversation(
+        **reply.model_dump(),
+        work_order_id=work_order["work_order_id"],
         vendor_id=vendor["vendor_id"],
         vendor_response=request.generated_message,
-        agent_response=response.output_text,
     )
     vendor_messages[conversation.vendor_id] = conversation
     for subscriber in message_subscribers.copy():
