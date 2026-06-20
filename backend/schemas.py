@@ -48,6 +48,10 @@ class VendorSearchResponse(BaseModel):
     )
 
 
+class WorkOrderResponse(VendorSearchResponse):
+    work_order_id: str
+
+
 class ChatTurn(BaseModel):
     role: Literal["user", "agent"]
     text: str
@@ -73,3 +77,22 @@ class VendorConversation(BaseModel):
     vendor_id: str
     vendor_response: str
     agent_response: str
+
+
+class SendMessageRequest(BaseModel):
+    vendor_id: str = Field(alias="vendorId")
+    response: str = Field(min_length=1)
+
+
+class StateTransition(BaseModel):
+    work_order_state: Literal[
+        "CONTACTING_VENDORS", "AUCTIONING", "VENDOR ASSIGNED", "SITE_VISIT", "COMPLETE"
+    ]
+    vendor_state: Literal[
+        "AWAITING_RESPONSE", "NEGOTIATING", "QUOTE_RECEIVED", "SELECTED"
+    ]
+
+
+class SendMessageResponse(StateTransition):
+    work_order_id: str
+    vendor_id: str

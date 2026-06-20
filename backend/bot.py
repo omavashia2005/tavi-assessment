@@ -40,6 +40,7 @@ from schemas import (
     VendorResult,
     VendorSearchResponse,
     WorkOrder,
+    WorkOrderResponse,
 )
 from system_prompts import (
     CHAT_INSTRUCTION,
@@ -267,10 +268,10 @@ async def vendor_search(order: WorkOrder) -> VendorSearchResponse:
     return result
 
 
-@app.post("/api/work-order", response_model=VendorSearchResponse)
+@app.post("/api/work-order", response_model=WorkOrderResponse)
 async def submit_work_order(
     order: WorkOrder, background_tasks: BackgroundTasks
-) -> VendorSearchResponse:
+) -> WorkOrderResponse:
     if not all(
         (
             order.siteLocation,
@@ -292,7 +293,8 @@ async def submit_work_order(
     if not selected_vendors:
         raise HTTPException(404, "No vendors found")
     work_order, vendors = _persist_work_order_vendors(order, selected_vendors)
-    response = VendorSearchResponse(
+    response = WorkOrderResponse(
+        work_order_id=work_order["work_order_id"],
         vendors=[
             vendor.model_copy(update={"id": saved["vendor_id"]})
             for vendor, saved in zip(selected_vendors, vendors, strict=True)

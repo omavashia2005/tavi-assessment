@@ -56,6 +56,7 @@ def test_submit_work_order() -> None:
     assert [vendor.vendorState for vendor in response.vendors] == [
         "AWAITING_RESPONSE"
     ] * 5
+    assert response.work_order_id == "order-1"
     assert [vendor.id for vendor in response.vendors] == [
         f"vendor-{index}" for index in range(5)
     ]
