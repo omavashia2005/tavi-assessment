@@ -137,7 +137,7 @@ async def generate_response(
         raise RuntimeError("OpenAI returned no vendor response")
     await asyncio.to_thread(
         _get_json,
-        f"{os.getenv('INTERNAL_API_URL', 'http://127.0.0.1:7860').rstrip('/')}/receive-message",
+        f"{os.getenv('INTERNAL_API_URL', 'http://127.0.0.1:7860').rstrip('/')}/api/receive-messages",
         {
             "vendor_id": vendor_id,
             "work_order_id": work_order_id,
@@ -146,7 +146,7 @@ async def generate_response(
     )
 
 
-@app.get("/receive-message", response_model=VendorConversation)
+@app.get("/api/receive-messages", response_model=VendorConversation)
 async def receive_message(
     request: Annotated[ReceiveMessageRequest, Query()],
 ) -> VendorConversation:

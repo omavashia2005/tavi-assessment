@@ -106,7 +106,7 @@ def test_generate_response_gets_receive_message() -> None:
 
     create.assert_awaited_once()
     get.assert_called_once_with(
-        "http://backend.test/receive-message",
+        "http://backend.test/api/receive-messages",
         {
             "vendor_id": "vendor-1",
             "work_order_id": "order-1",
