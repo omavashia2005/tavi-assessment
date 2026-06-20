@@ -36,7 +36,7 @@ the vendor and keeping your message short, informative, and professionally warm.
 """.strip()
 
 VENDOR_ROLEPLAY = """
-Roleplay as vendor {vendor_id} responding to facility manager outreach below.
+Roleplay as vendor {vendor_name} responding to facility manager outreach below.
 Choose one realistic path: provide a quote, negotiate a requirement, or request a
 site visit. Reply only with the vendor's concise, professional message.
 

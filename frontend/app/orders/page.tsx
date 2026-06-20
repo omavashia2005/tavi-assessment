@@ -189,6 +189,7 @@ function FilterSelect({
 }
 
 function OrderDetail({ order }: { order: PlacedOrder }) {
+  const { vendorMessages } = useWorkflow()
   const [openVendorIndex, setOpenVendorIndex] = useState<number | null>(null)
   const openVendor = openVendorIndex == null ? null : order.vendors[openVendorIndex] ?? null
 
@@ -208,6 +209,7 @@ function OrderDetail({ order }: { order: PlacedOrder }) {
             <VendorCard
               key={`${order.id}-${i}`}
               vendor={vendor}
+              hasResponse={Boolean(vendorMessages[vendor.id])}
               onOpen={() => setOpenVendorIndex(i)}
             />
           ))}
@@ -223,9 +225,11 @@ function OrderDetail({ order }: { order: PlacedOrder }) {
 
 function VendorCard({
   vendor,
+  hasResponse,
   onOpen,
 }: {
   vendor: VendorResult
+  hasResponse: boolean
   onOpen: () => void
 }) {
   const isWinning = vendor.vendorState === "SELECTED"
@@ -234,10 +238,17 @@ function VendorCard({
       type="button"
       onClick={onOpen}
       className={cn(
-        "group flex h-full flex-col gap-4 rounded-xl border border-border bg-card p-5 text-left transition-all hover:-translate-y-0.5 hover:border-foreground/20 hover:shadow-lg focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-ring/50",
+        "group relative flex h-full flex-col gap-4 rounded-xl border border-border bg-card p-5 text-left transition-all hover:-translate-y-0.5 hover:border-foreground/20 hover:shadow-lg focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-ring/50",
         isWinning && "border-emerald-500/40 shadow-emerald-500/10 shadow-lg",
+        hasResponse && !isWinning && "border-primary/60 ring-2 ring-primary/30 shadow-lg shadow-primary/10",
       )}
     >
+      {hasResponse ? (
+        <Badge className="absolute -top-2 -right-2 gap-1 shadow-sm">
+          <MessageSquare className="size-3" />
+          New reply
+        </Badge>
+      ) : null}
       <div className="flex items-start justify-between gap-3">
         <div className="flex min-w-0 flex-col gap-1">
           <span className="truncate text-base font-semibold">{vendor.name}</span>

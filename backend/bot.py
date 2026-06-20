@@ -4,7 +4,6 @@ import random
 import re
 import urllib.parse
 from typing import cast
-
 from db import DB_PATH, create_vendor, create_work_order, get_vendor, get_work_order
 from dotenv import load_dotenv
 from fastapi import BackgroundTasks, HTTPException
@@ -108,10 +107,17 @@ def _persist_work_order_vendors(
 async def generate_response(
     outreach_message: str, vendor_id: str, work_order_id: str
 ) -> None:
+
+    vendor = get_vendor(vendor_id=vendor_id)
+
+    vendor_name = ""
+    if vendor:
+        vendor_name = vendor.get("name")
+
     response = await openai.responses.create(
         model=os.getenv("OPENAI_LLM_MODEL", "gpt-4.1-mini"),
         input=VENDOR_ROLEPLAY.format(
-            vendor_id=vendor_id,
+            vendor_name=vendor_name,
             work_order_id=work_order_id,
             outreach_message=outreach_message,
         ),
