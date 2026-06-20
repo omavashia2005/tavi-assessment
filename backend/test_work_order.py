@@ -118,6 +118,19 @@ def test_update_order_vendor_states() -> None:
 def test_generate_response_processes_vendor_message() -> None:
     with (
         patch(
+            "bot.get_work_order",
+            return_value={"work_order_id": "order-1", "state": "AUCTIONING"},
+        ),
+        patch(
+            "bot.get_vendor",
+            return_value={
+                "vendor_id": "vendor-1",
+                "work_order_id": "order-1",
+                "name": "Vendor 1",
+                "vendor_state": "NEGOTIATING",
+            },
+        ),
+        patch(
             "bot.openai.responses.create",
             return_value=SimpleNamespace(output_text="We can quote $8,500."),
         ) as create,

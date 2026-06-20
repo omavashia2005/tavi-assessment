@@ -106,21 +106,20 @@ def _persist_work_order_vendors(
 
 
 async def generate_response(
-    outreach_message: str, vendor_id: str, work_order_id: str
+    manager_message: str, vendor_id: str, work_order_id: str
 ) -> None:
-
-    vendor = get_vendor(vendor_id=vendor_id)
-
-    vendor_name = ""
-    if vendor:
-        vendor_name = vendor.get("name")
+    work_order = get_work_order(work_order_id)
+    vendor = get_vendor(vendor_id)
+    if not work_order or not vendor or vendor["work_order_id"] != work_order_id:
+        raise RuntimeError("Work order or vendor not found")
 
     response = await openai.responses.create(
         model=os.getenv("OPENAI_LLM_MODEL", "gpt-4.1-mini"),
         input=VENDOR_ROLEPLAY.format(
-            vendor_name=vendor_name,
-            work_order_id=work_order_id,
-            outreach_message=outreach_message,
+            vendor_name=vendor["name"],
+            work_order=work_order,
+            vendor=vendor,
+            manager_message=manager_message,
         ),
     )
     if not response.output_text:
