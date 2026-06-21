@@ -2,12 +2,7 @@
 
 Requires Python 3.11+ and an OpenAI API key.
 
-
 Get Firecrawl API key: http://firecrawl.dev
-
-This codebase also requires pipecat for the voice integration: https://docs.pipecat.ai/pipecat/get-started/quickstart
-
-Preferably, download the pipecat-docs mcp server and ask your coding agent of choice to set the project dependencies for pipecat up. https://docs.pipecat.ai/api-reference/context-hub#claude-code
 
 ```bash
 cd backend
@@ -17,6 +12,10 @@ uv sync
 uv pip install geopy
 uv run python bot.py -t webrtc
 ```
+
+In case pipecat (the voice agent framwork this project uses) throws errors or causes issues (ideally should not), 
+
+Download the pipecat-docs mcp server and ask your coding agent of choice to set the project dependencies for pipecat up. https://docs.pipecat.ai/api-reference/context-hub#claude-code
 
 FastAPI runs at `http://localhost:7860`; stop it with `Ctrl+C`.
 
