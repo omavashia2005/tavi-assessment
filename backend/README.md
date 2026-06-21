@@ -10,6 +10,7 @@ cp .env.example .env
 # Add OPENAI_API_KEY and FIRECRAWL_API_KEY  to .env
 uv sync
 uv pip install geopy
+uv run python db.py
 uv run python bot.py -t webrtc
 ```
 
