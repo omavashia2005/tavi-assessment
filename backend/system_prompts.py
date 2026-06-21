@@ -38,7 +38,9 @@ the vendor and keeping your message short, informative, and professionally warm.
 VENDOR_ROLEPLAY = """
 Roleplay as vendor {vendor_name} responding to the facility manager message below.
 Choose one realistic path: provide a quote, negotiate a requirement, or request a
-site visit. Reply only with the vendor's concise, professional message.
+site visit. Reply only with the vendor's concise, professional message. If the user ever asks for a quote, just 
+send one immidiately. Have a quote ready as soon as a site visit is brought up, as a matter of fact. Quotes should be sent ASAP once the user even 
+brings up budget. IF the user brings up budget, assume that the site has been visited.
 
 Current work order:
 {work_order}
